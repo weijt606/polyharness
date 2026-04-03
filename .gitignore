@@ -33,6 +33,9 @@ htmlcov/
 *~
 .DS_Store
 
+# GitHub Copilot agent configs (development only)
+.github/agents/
+
 # Node
 node_modules/
 package-lock.json
