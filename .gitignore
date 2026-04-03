@@ -36,6 +36,11 @@ htmlcov/
 # GitHub Copilot agent configs (development only)
 .github/agents/
 
+# Internal research notes (development only)
+docs/research/claude-code-vs-meta-harness.md
+docs/research/information-bottleneck-hypothesis.md
+docs/research/tbench2-artifact-code-analysis.md
+
 # Node
 node_modules/
 package-lock.json
