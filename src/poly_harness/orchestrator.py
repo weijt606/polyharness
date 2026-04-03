@@ -48,9 +48,10 @@ class Orchestrator:
 
     def run(self) -> SearchResult:
         """Execute the full search loop."""
+        max_iter = self.config.search.max_iterations
 
         console.rule("[bold blue]PolyHarness Optimization Loop")
-        console.print(f"Max iterations: {self.config.search.max_iterations}")
+        console.print(f"Max iterations: {max_iter}")
         console.print(f"Early stop patience: {self.config.search.early_stop_patience}")
         console.print(f"Proposer backend: {self.config.proposer.backend}")
         console.print()
@@ -64,53 +65,78 @@ class Orchestrator:
 
         self._print_iteration(0, base_result, best_score, None)
 
-        for i in range(1, self.config.search.max_iterations + 1):
-            console.rule(f"[bold]Iteration {i}")
-
-            # Step 1: Select parent
-            parent = self._select_parent()
-
-            # Step 2: Prepare candidate directory (copy from parent)
-            console.print(f"  Proposer: generating candidate from iter_{parent}...")
-            cand_dir = self.workspace.prepare_candidate(i, parent)
-
-            # Step 3: Proposer generates new candidate
-            metadata = self.proposer.propose(
-                workspace_root=self.workspace.root,
-                candidate_dir=cand_dir,
-                iteration=i,
-                parent=parent,
+        if max_iter == 0:
+            console.print("\n[yellow]Dry run — base evaluation only.[/yellow]")
+            return SearchResult(
+                best_iteration=0,
+                best_score=best_score,
+                total_iterations=0,
             )
 
-            # Step 4: Evaluate
-            console.print("  Evaluator: running evaluation...")
-            score = self._evaluate_iteration(i)
+        from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
-            # Step 5: Store results
-            log_entry = self.search_log.entries[-1]  # just appended in _evaluate_iteration
-            self.workspace.store_iteration(
-                iteration=i,
-                score=log_entry.score,
-                task_scores=log_entry.task_scores,
-                parent=parent,
-                metadata=metadata,
-            )
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold]{task.description}"),
+            BarColumn(),
+            TextColumn("{task.completed}/{task.total}"),
+            TextColumn("best={task.fields[best]:.4f}"),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task("Searching", total=max_iter, best=best_score)
 
-            self._print_iteration(i, score, best_score, parent)
+            for i in range(1, max_iter + 1):
+                progress.update(task, description=f"iter_{i}")
 
-            # Step 6: Update best & check early stop
-            if score > best_score:
-                best_score = score
-                best_iteration = i
-                patience_counter = 0
-                console.print(f"  [bold green]New best! Score: {score:.4f}[/bold green]")
-            else:
-                patience_counter += 1
-                console.print(f"  No improvement. Patience: {patience_counter}/{self.config.search.early_stop_patience}")
+                # Step 1: Select parent
+                parent = self._select_parent()
 
-            if patience_counter >= self.config.search.early_stop_patience:
-                console.print("\n[yellow]Early stopping triggered.[/yellow]")
-                break
+                # Step 2: Prepare candidate directory (copy from parent)
+                cand_dir = self.workspace.prepare_candidate(i, parent)
+
+                # Step 3: Proposer generates new candidate
+                metadata = self.proposer.propose(
+                    workspace_root=self.workspace.root,
+                    candidate_dir=cand_dir,
+                    iteration=i,
+                    parent=parent,
+                )
+
+                # Step 4: Evaluate
+                score = self._evaluate_iteration(i)
+
+                # Step 5: Store results
+                log_entry = self.search_log.entries[-1]
+                self.workspace.store_iteration(
+                    iteration=i,
+                    score=log_entry.score,
+                    task_scores=log_entry.task_scores,
+                    parent=parent,
+                    metadata=metadata,
+                )
+
+                # Step 6: Update best & check early stop
+                if score > best_score:
+                    best_score = score
+                    best_iteration = i
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+
+                progress.update(task, advance=1, best=best_score)
+
+                if patience_counter >= self.config.search.early_stop_patience:
+                    break
+
+        # Print iteration summary after progress bar completes
+        console.print()
+        for entry in self.search_log.entries:
+            if entry.iteration > 0:
+                self._print_iteration(entry.iteration, entry.score, entry.best_so_far, entry.parent)
+
+        if patience_counter >= self.config.search.early_stop_patience:
+            console.print("\n[yellow]Early stopping triggered.[/yellow]")
 
         # Final summary
         result = SearchResult(

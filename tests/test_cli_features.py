@@ -1,0 +1,205 @@
+"""Tests for new CLI features: verbose/quiet, dry-run, clean, progress bar."""
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
+
+from poly_harness.cli import main
+from poly_harness.workspace import Workspace
+
+
+@pytest.fixture
+def workspace(tmp_path):
+    """Create a minimal initialized workspace."""
+    ws = Workspace.init(tmp_path / "ws", agent_backend="local")
+    (ws.base_harness_dir / "harness.py").write_text("SCORE_HINT = 0.3\n")
+    return ws
+
+
+@pytest.fixture
+def runner():
+    return CliRunner()
+
+
+# --- Global flags ---
+
+
+def test_help_shows_verbose_quiet(runner):
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "--verbose" in result.output or "-v" in result.output
+    assert "--quiet" in result.output or "-q" in result.output
+
+
+def test_quiet_flag_accepted(runner, workspace):
+    result = runner.invoke(main, ["-q", "status", "--workspace", str(workspace.root)])
+    # Should not crash (workspace has no log yet, so it will error about missing data, but flag should parse)
+    assert result.exit_code in (0, 1)
+
+
+def test_verbose_flag_accepted(runner, workspace):
+    result = runner.invoke(main, ["-v", "status", "--workspace", str(workspace.root)])
+    assert result.exit_code in (0, 1)
+
+
+# --- Dry run ---
+
+
+def test_run_dry_run_flag_in_help(runner):
+    result = runner.invoke(main, ["run", "--help"])
+    assert result.exit_code == 0
+    assert "--dry-run" in result.output
+
+
+def test_run_dry_run(runner, workspace):
+    """Dry run should evaluate base only and return quickly."""
+    # Write a simple evaluate.py
+    eval_script = workspace.root / "evaluate.py"
+    eval_script.write_text(
+        'import json, sys\n'
+        'print(json.dumps({"overall_score": 0.5, "task_scores": {"t1": 0.5}}))\n'
+    )
+    result = runner.invoke(main, ["run", "--workspace", str(workspace.root), "--dry-run"])
+    assert result.exit_code == 0
+    assert "Dry run" in result.output or "base" in result.output.lower()
+
+
+# --- Clean command ---
+
+
+def test_clean_help(runner):
+    result = runner.invoke(main, ["clean", "--help"])
+    assert result.exit_code == 0
+    assert "--keep-best" in result.output
+    assert "--yes" in result.output
+
+
+def test_clean_empty_workspace(runner, workspace):
+    """Clean on workspace with no candidates should say nothing to clean."""
+    result = runner.invoke(main, ["clean", "--workspace", str(workspace.root), "-y"])
+    assert result.exit_code == 0
+    assert "Nothing to clean" in result.output
+
+
+def test_clean_removes_candidates(runner, workspace):
+    """Clean should remove candidate directories."""
+    # Create some fake candidate dirs
+    for i in range(3):
+        d = workspace.candidates_dir / f"iter_{i}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "harness.py").write_text(f"# iter {i}\n")
+
+    result = runner.invoke(main, ["clean", "--workspace", str(workspace.root), "-y"])
+    assert result.exit_code == 0
+    assert "Cleaned" in result.output
+    # All candidate dirs should be gone
+    remaining = list(workspace.candidates_dir.iterdir())
+    assert len([d for d in remaining if d.is_dir()]) == 0
+
+
+def test_clean_keep_best(runner, workspace):
+    """Clean --keep-best should preserve the best candidate."""
+    # Create fake candidates + a search log with iter_1 as best
+    for i in range(3):
+        d = workspace.candidates_dir / f"iter_{i}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "harness.py").write_text(f"# iter {i}\n")
+        (d / "score.json").write_text(json.dumps({"overall_score": 0.3 + i * 0.1}))
+
+    # Write search log entries so best_iteration can be determined
+    from poly_harness.search_log import SearchLog
+    log = SearchLog(workspace.search_log_path)
+    log.append(iteration=0, parent=None, score=0.3, task_scores={})
+    log.append(iteration=1, parent=0, score=0.5, task_scores={})
+    log.append(iteration=2, parent=0, score=0.4, task_scores={})
+
+    result = runner.invoke(main, ["clean", "--workspace", str(workspace.root), "--keep-best", "-y"])
+    assert result.exit_code == 0
+
+    # iter_1 (best) should be preserved
+    remaining = [d.name for d in workspace.candidates_dir.iterdir() if d.is_dir()]
+    assert "iter_1" in remaining
+    assert len(remaining) == 1
+
+
+# --- Orchestrator dry-run ---
+
+
+def test_orchestrator_dry_run(tmp_path):
+    """Orchestrator with max_iterations=0 should return after base eval."""
+    from poly_harness.config import PolyHarnessConfig
+    from poly_harness.evaluator import BaseEvaluator, EvalResult
+    from poly_harness.orchestrator import Orchestrator, SearchResult
+    from poly_harness.proposer.base import BaseProposer
+
+    class NeverCalled(BaseProposer):
+        def propose(self, workspace_root, candidate_dir, iteration, parent):
+            raise AssertionError("Proposer should not be called in dry run")
+
+    class SimpleEval(BaseEvaluator):
+        def evaluate(self, candidate_dir, tasks):
+            return EvalResult(overall_score=0.42, task_scores={"t": 0.42})
+
+    ws = Workspace.init(tmp_path / "ws")
+    (ws.base_harness_dir / "harness.py").write_text("pass\n")
+    config = ws.load_config()
+    config.search.max_iterations = 0
+
+    orch = Orchestrator(workspace=ws, config=config, proposer=NeverCalled(), evaluator=SimpleEval())
+    result = orch.run()
+
+    assert isinstance(result, SearchResult)
+    assert result.best_iteration == 0
+    assert result.best_score == pytest.approx(0.42)
+    assert result.total_iterations == 0
+
+
+# --- Status enhancements ---
+
+
+def test_status_shows_elapsed(runner, workspace):
+    """Status should display elapsed time when log has timestamps."""
+    import json as _json
+
+    entries = [
+        {"iteration": 0, "parent": None, "score": 0.3, "best_so_far": 0.3,
+         "timestamp": "2025-01-01T00:00:00", "task_scores": {}},
+        {"iteration": 1, "parent": 0, "score": 0.5, "best_so_far": 0.5,
+         "timestamp": "2025-01-01T00:05:30", "task_scores": {}},
+    ]
+    with open(workspace.search_log_path, "w") as f:
+        for e in entries:
+            f.write(_json.dumps(e) + "\n")
+
+    # Create candidate dirs so workspace looks valid
+    for i in range(2):
+        d = workspace.candidates_dir / f"iter_{i}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "score.json").write_text(json.dumps({"overall_score": 0.3 + i * 0.2}))
+
+    result = runner.invoke(main, ["status", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    # Should contain elapsed time info
+    assert "Elapsed" in result.output or "elapsed" in result.output or "5m" in result.output
+
+
+# --- Log delta column ---
+
+
+def test_log_shows_delta(runner, workspace):
+    """ph log should display delta column."""
+    from poly_harness.search_log import SearchLog
+
+    log = SearchLog(workspace.search_log_path)
+    log.append(iteration=0, parent=None, score=0.3, task_scores={})
+    log.append(iteration=1, parent=0, score=0.5, task_scores={})
+    log.append(iteration=2, parent=1, score=0.4, task_scores={})
+
+    result = runner.invoke(main, ["log", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    # Delta column header or values should appear
+    assert "Δ" in result.output or "delta" in result.output.lower() or "+0.2" in result.output

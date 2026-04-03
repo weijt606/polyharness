@@ -16,8 +16,15 @@ console = Console()
 
 @click.group()
 @click.version_option(version=__version__, prog_name="poly-harness")
-def main():
+@click.option("-v", "--verbose", is_flag=True, help="Show detailed output.")
+@click.option("-q", "--quiet", is_flag=True, help="Suppress non-essential output.")
+@click.pass_context
+def main(ctx: click.Context, verbose: bool, quiet: bool):
     """PolyHarness — Make your AI Agent evolve automatically."""
+    ctx.ensure_object(dict)
+    ctx.obj["verbose"] = verbose
+    ctx.obj["quiet"] = quiet
+    console.quiet = quiet
 
 
 @main.command()
@@ -89,7 +96,8 @@ def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | No
     help="Workspace directory.",
 )
 @click.option("--max-iterations", type=int, default=None, help="Override max iterations.")
-def run(workspace: str, max_iterations: int | None):
+@click.option("--dry-run", is_flag=True, help="Only evaluate base harness, don't start search.")
+def run(workspace: str, max_iterations: int | None, dry_run: bool):
     """Start the optimization search loop."""
     from poly_harness.config import PolyHarnessConfig
     from poly_harness.orchestrator import Orchestrator
@@ -104,6 +112,9 @@ def run(workspace: str, max_iterations: int | None):
     if max_iterations is not None:
         config.search.max_iterations = max_iterations
 
+    if dry_run:
+        config.search.max_iterations = 0
+
     orch = Orchestrator(workspace=ws, config=config)
     orch.run()
 
@@ -117,6 +128,8 @@ def run(workspace: str, max_iterations: int | None):
 )
 def status(workspace: str):
     """Show current optimization progress."""
+    from datetime import datetime
+
     from poly_harness.search_log import SearchLog
     from poly_harness.workspace import Workspace
 
@@ -146,8 +159,37 @@ def status(workspace: str):
         )
 
     console.print(table)
-    console.print(f"\nTotal iterations: {len(log)}")
-    console.print(f"Best: iter_{log.best_iteration} (score: {log.best_score:.4f})")
+
+    # Summary stats
+    entries = log.entries
+    total = len(entries)
+    best_i = log.best_iteration
+    best_s = log.best_score
+    base_s = entries[0].score if entries else 0.0
+    improved_count = sum(1 for e in entries[1:] if e.score > base_s)
+    improvement_rate = improved_count / (total - 1) if total > 1 else 0.0
+
+    console.print(f"\nTotal iterations: {total}")
+    console.print(f"Best: iter_{best_i} (score: {best_s:.4f})")
+    console.print(
+        f"Improvement: {base_s:.4f} → {best_s:.4f} "
+        f"([green]+{best_s - base_s:.4f}[/green])"
+    )
+    if total > 1:
+        console.print(f"Improvement rate: {improvement_rate:.0%} ({improved_count}/{total - 1} iterations beat base)")
+
+    # Elapsed time from first to last entry timestamp
+    try:
+        t0 = datetime.fromisoformat(entries[0].timestamp)
+        t1 = datetime.fromisoformat(entries[-1].timestamp)
+        elapsed = t1 - t0
+        mins = elapsed.total_seconds() / 60
+        if mins < 1:
+            console.print(f"Elapsed: {elapsed.total_seconds():.0f}s")
+        else:
+            console.print(f"Elapsed: {mins:.1f}min")
+    except (ValueError, AttributeError):
+        pass
 
 
 @main.command()
@@ -391,11 +433,12 @@ def log(workspace: str, flat: bool):
         return
 
     best_i = search_log.best_iteration
+    parent_scores = {e.iteration: e.score for e in search_log.entries}
 
     if flat:
-        _print_log_flat(search_log.entries, best_i)
+        _print_log_flat(search_log.entries, best_i, parent_scores)
     else:
-        _print_log_tree(search_log.entries, best_i)
+        _print_log_tree(search_log.entries, best_i, parent_scores)
 
     console.print(
         f"\n{len(search_log)} iterations  |  "
@@ -403,23 +446,26 @@ def log(workspace: str, flat: bool):
     )
 
 
-def _log_entry_label(entry, best_i: int) -> str:
+def _log_entry_label(entry, best_i: int, parent_scores: dict[int, float] | None = None) -> str:
     """Format a single log entry as a rich-styled label."""
-    from poly_harness.search_log import LogEntry
-
     star = " [bold yellow]★[/bold yellow]" if entry.iteration == best_i else ""
     score_color = "green" if entry.score >= entry.best_so_far else "white"
     delta = ""
-    if entry.parent is not None:
-        # We can't easily get parent score here, so just show absolute score
-        pass
+    if parent_scores and entry.parent is not None and entry.parent in parent_scores:
+        d = entry.score - parent_scores[entry.parent]
+        if d > 0:
+            delta = f"  [green]+{d:.4f}[/green]"
+        elif d < 0:
+            delta = f"  [red]{d:.4f}[/red]"
+        else:
+            delta = "  [dim]+0.0000[/dim]"
     return (
         f"[bold cyan]iter_{entry.iteration}[/bold cyan]  "
-        f"[{score_color}]{entry.score:.4f}[/{score_color}]{star}"
+        f"[{score_color}]{entry.score:.4f}[/{score_color}]{delta}{star}"
     )
 
 
-def _print_log_tree(entries, best_i: int) -> None:
+def _print_log_tree(entries, best_i: int, parent_scores: dict[int, float] | None = None) -> None:
     """Print a rich Tree showing parent→child relationships."""
     from rich.tree import Tree
 
@@ -435,41 +481,52 @@ def _print_log_tree(entries, best_i: int) -> None:
     roots = children.get(None, [])
     if not roots:
         # Fallback to flat if no root found
-        _print_log_flat(entries, best_i)
+        _print_log_flat(entries, best_i, parent_scores)
         return
 
     tree = Tree("[bold]Search Tree[/bold]")
 
     def _add_children(parent_tree, iteration: int) -> None:
         for child in children.get(iteration, []):
-            label = _log_entry_label(child, best_i)
+            label = _log_entry_label(child, best_i, parent_scores)
             branch = parent_tree.add(label)
             _add_children(branch, child.iteration)
 
     for root_entry in roots:
-        label = _log_entry_label(root_entry, best_i)
+        label = _log_entry_label(root_entry, best_i, parent_scores)
         root_branch = tree.add(label)
         _add_children(root_branch, root_entry.iteration)
 
     console.print(tree)
 
 
-def _print_log_flat(entries, best_i: int) -> None:
+def _print_log_flat(entries, best_i: int, parent_scores: dict[int, float] | None = None) -> None:
     """Print a chronological table of all iterations."""
     table = Table(title="Search Log")
     table.add_column("Iteration", style="cyan")
     table.add_column("Parent", style="dim")
     table.add_column("Score", style="green")
+    table.add_column("Δ", style="bold")
     table.add_column("Best", style="bold green")
     table.add_column("", style="yellow")
 
     for e in entries:
         parent_str = f"iter_{e.parent}" if e.parent is not None else "—"
         star = "★" if e.iteration == best_i else ""
+        delta = "—"
+        if parent_scores and e.parent is not None and e.parent in parent_scores:
+            d = e.score - parent_scores[e.parent]
+            if d > 0:
+                delta = f"[green]+{d:.4f}[/green]"
+            elif d < 0:
+                delta = f"[red]{d:.4f}[/red]"
+            else:
+                delta = "[dim]+0.0000[/dim]"
         table.add_row(
             f"iter_{e.iteration}",
             parent_str,
             f"{e.score:.4f}",
+            delta,
             f"{e.best_so_far:.4f}",
             star,
         )
@@ -551,6 +608,66 @@ def export_cmd(target: str, workspace: str, iteration: int | None, include_meta:
     console.print(
         f"[green]Exported iter_{iter_i}{score_str} → {target_path}[/green]  ({copied} file{'s' if copied != 1 else ''})"
     )
+
+
+@main.command()
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".",
+    help="Workspace directory.",
+)
+@click.option("--keep-best", is_flag=True, help="Keep the best candidate directory.")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompt.")
+def clean(workspace: str, keep_best: bool, yes: bool):
+    """Remove candidate directories and search log to free disk space."""
+    import shutil
+
+    from poly_harness.workspace import Workspace
+
+    ws = Workspace(workspace)
+    if not ws.is_initialized():
+        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        raise SystemExit(1)
+
+    candidates_dir = ws.candidates_dir
+    if not candidates_dir.exists() or not any(candidates_dir.iterdir()):
+        console.print("Nothing to clean.")
+        return
+
+    log = ws.search_log()
+    best_i = log.best_iteration if log.entries else None
+    dirs = sorted(d for d in candidates_dir.iterdir() if d.is_dir())
+    to_remove = [d for d in dirs if not (keep_best and best_i is not None and d.name == f"iter_{best_i}")]
+
+    if not to_remove:
+        console.print("Nothing to clean (best candidate preserved).")
+        return
+
+    total_size = sum(f.stat().st_size for d in to_remove for f in d.rglob("*") if f.is_file())
+    size_mb = total_size / (1024 * 1024)
+
+    console.print(f"Will remove {len(to_remove)} candidate dir(s) ({size_mb:.1f} MB)")
+    if keep_best and best_i is not None:
+        console.print(f"  Keeping: iter_{best_i} (best)")
+
+    if not yes:
+        click.confirm("Proceed?", abort=True)
+
+    for d in to_remove:
+        shutil.rmtree(d)
+
+    # Clear search log and summary unless keeping best
+    if not keep_best:
+        log_path = ws.search_log_path
+        if log_path.exists():
+            log_path.write_text("")
+        summary_dir = ws.summary_dir
+        if summary_dir.exists():
+            shutil.rmtree(summary_dir)
+            summary_dir.mkdir()
+
+    console.print(f"[green]Cleaned {len(to_remove)} candidate(s) ({size_mb:.1f} MB freed)[/green]")
 
 
 def _load_score(candidate_dir: Path) -> dict:

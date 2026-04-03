@@ -261,7 +261,7 @@ def test_factory_creates_cli_proposers():
     from poly_harness.proposer import create_proposer
 
     for backend in ["claude-code", "claw-code", "codex", "opencode"]:
-        config = ProposerConfig(backend=backend)
+        config = ProposerConfig(backend=backend)  # type: ignore[arg-type]
         proposer = create_proposer(config)
         assert isinstance(proposer, CLIProposer)
         assert proposer.backend == backend
@@ -272,5 +272,5 @@ def test_config_accepts_new_backends():
     from poly_harness.config import ProposerConfig
 
     for backend in ["api", "claude-code", "claw-code", "codex", "opencode", "local"]:
-        cfg = ProposerConfig(backend=backend)
+        cfg = ProposerConfig(backend=backend)  # type: ignore[arg-type]
         assert cfg.backend == backend
