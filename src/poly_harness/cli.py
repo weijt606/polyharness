@@ -104,7 +104,13 @@ def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | No
     default=None,
     help="Override proposer backend without editing config.",
 )
-def run(workspace: str, max_iterations: int | None, dry_run: bool, resume: bool, backend: str | None):
+@click.option(
+    "--strategy",
+    type=click.Choice(["best", "tournament", "all"], case_sensitive=False),
+    default=None,
+    help="Override parent selection strategy.",
+)
+def run(workspace: str, max_iterations: int | None, dry_run: bool, resume: bool, backend: str | None, strategy: str | None):
     """Start the optimization search loop."""
     from poly_harness.config import PolyHarnessConfig
     from poly_harness.orchestrator import Orchestrator
@@ -121,6 +127,9 @@ def run(workspace: str, max_iterations: int | None, dry_run: bool, resume: bool,
 
     if backend is not None:
         config.proposer.backend = backend  # type: ignore[assignment]
+
+    if strategy is not None:
+        config.search.parent_selection = strategy  # type: ignore[assignment]
 
     if dry_run:
         config.search.max_iterations = 0
@@ -804,6 +813,341 @@ def diff(iteration: int, workspace: str, no_diff: bool):
 
     ctx = Context(compare, info_name="diff")
     ctx.invoke(compare, left="0", right=str(iteration), workspace=workspace, no_diff=no_diff)
+
+
+# --- leaderboard command ---
+
+
+@main.command()
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".",
+    help="Workspace directory.",
+)
+@click.option("-n", "--top", type=int, default=None, help="Show only top N candidates.")
+@click.option("--tasks", is_flag=True, help="Show per-task score breakdown.")
+def leaderboard(workspace: str, top: int | None, tasks: bool):
+    """Display a ranked leaderboard of all candidates."""
+    from poly_harness.workspace import Workspace
+
+    ws = Workspace(workspace)
+    if not ws.is_initialized():
+        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        raise SystemExit(1)
+
+    log = ws.search_log()
+    if not log.entries:
+        console.print("No iterations recorded yet. Run 'ph run' to start.")
+        return
+
+    # Build ranked list sorted by score descending
+    entries = sorted(log.entries, key=lambda e: e.score, reverse=True)
+    if top is not None:
+        entries = entries[:top]
+
+    base_score = next((e.score for e in log.entries if e.iteration == 0), 0.0)
+
+    # Gather all task names
+    all_task_names: list[str] = []
+    if tasks:
+        task_set: set[str] = set()
+        for e in entries:
+            task_set.update(e.task_scores.keys())
+        all_task_names = sorted(task_set)
+
+    table = Table(title="Leaderboard")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Candidate", style="cyan")
+    table.add_column("Score", style="green")
+    table.add_column("vs Base", style="bold")
+    table.add_column("Parent", style="dim")
+    if tasks:
+        for tn in all_task_names:
+            table.add_column(tn, style="white", width=8)
+
+    for rank, entry in enumerate(entries, 1):
+        diff = entry.score - base_score
+        if diff > 0:
+            vs_base = f"[green]+{diff:.4f}[/green]"
+        elif diff < 0:
+            vs_base = f"[red]{diff:.4f}[/red]"
+        else:
+            vs_base = "[dim]±0[/dim]"
+
+        parent_str = f"iter_{entry.parent}" if entry.parent is not None else "—"
+        marker = " ★" if rank == 1 else ""
+
+        row = [
+            str(rank),
+            f"iter_{entry.iteration}{marker}",
+            f"{entry.score:.4f}",
+            vs_base,
+            parent_str,
+        ]
+        if tasks:
+            for tn in all_task_names:
+                val = entry.task_scores.get(tn)
+                row.append(f"{val:.2f}" if val is not None else "—")
+
+        table.add_row(*row)
+
+    console.print(table)
+    console.print(f"\n{len(log)} total iterations  |  Showing top {len(entries)}")
+
+
+# --- trace command ---
+
+
+@main.command()
+@click.argument("iteration", type=int)
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".",
+    help="Workspace directory.",
+)
+@click.option("--task", type=str, default=None, help="Show traces for a specific task only.")
+def trace(iteration: int, workspace: str, task: str | None):
+    """View execution traces (stdout, stderr, metrics) for ITERATION."""
+    from poly_harness.workspace import Workspace
+
+    ws = Workspace(workspace)
+    if not ws.is_initialized():
+        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        raise SystemExit(1)
+
+    cand_dir = ws.candidate_path(iteration)
+    if not cand_dir.exists():
+        console.print(f"[red]Error:[/red] iter_{iteration} not found.")
+        raise SystemExit(1)
+
+    traces_dir = cand_dir / "traces"
+    if not traces_dir.exists() or not any(traces_dir.iterdir()):
+        console.print(f"No traces found for iter_{iteration}.")
+        return
+
+    # Collect unique task names from trace files
+    task_names: set[str] = set()
+    for f in traces_dir.iterdir():
+        if f.is_file():
+            name = f.stem
+            # Remove suffixes like .stdout, .stderr, .exitcode, .metrics
+            for suffix in (".stdout", ".stderr", ".exitcode", ".metrics"):
+                if name.endswith(suffix):
+                    name = name[: -len(suffix)]
+                    break
+            task_names.add(name)
+
+    if task:
+        task_names = {t for t in task_names if t == task}
+        if not task_names:
+            console.print(f"[red]Error:[/red] No traces for task '{task}'.")
+            raise SystemExit(1)
+
+    # Show score
+    score_data = _load_score(cand_dir)
+    if score_data:
+        console.print(f"[bold]iter_{iteration}[/bold]  score={score_data.get('overall_score', '?')}")
+    console.print()
+
+    from rich.panel import Panel
+    from rich.syntax import Syntax
+
+    for tn in sorted(task_names):
+        console.rule(f"[bold cyan]Task: {tn}[/bold cyan]")
+
+        # Exit code
+        exitcode_file = traces_dir / f"{tn}.exitcode"
+        if exitcode_file.exists():
+            code = exitcode_file.read_text().strip()
+            color = "green" if code == "0" else "red"
+            console.print(f"Exit code: [{color}]{code}[/{color}]")
+
+        # Metrics
+        metrics_file = traces_dir / f"{tn}.metrics.json"
+        if metrics_file.exists():
+            metrics = json.loads(metrics_file.read_text())
+            score_val = metrics.get("score", metrics.get("overall_score"))
+            if score_val is not None:
+                console.print(f"Score: {score_val}")
+            task_s = metrics.get("task_scores", {})
+            if task_s:
+                for k, v in task_s.items():
+                    console.print(f"  {k}: {v}")
+
+        # Stdout
+        stdout_file = traces_dir / f"{tn}.stdout"
+        if stdout_file.exists():
+            content = stdout_file.read_text()
+            if content.strip():
+                # Truncate if very long
+                lines = content.splitlines()
+                if len(lines) > 50:
+                    display = "\n".join(lines[:25] + [f"... ({len(lines) - 50} lines omitted) ..."] + lines[-25:])
+                else:
+                    display = content
+                console.print(Panel(display, title="stdout", border_style="green", expand=False))
+
+        # Stderr
+        stderr_file = traces_dir / f"{tn}.stderr"
+        if stderr_file.exists():
+            content = stderr_file.read_text()
+            if content.strip():
+                lines = content.splitlines()
+                if len(lines) > 30:
+                    display = "\n".join(lines[:15] + [f"... ({len(lines) - 30} lines omitted) ..."] + lines[-15:])
+                else:
+                    display = content
+                console.print(Panel(display, title="stderr", border_style="red", expand=False))
+
+        console.print()
+
+
+# --- report command ---
+
+
+@main.command()
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".",
+    help="Workspace directory.",
+)
+@click.option(
+    "-o", "--output",
+    type=click.Path(),
+    default=None,
+    help="Output file path (default: summary/report.md).",
+)
+def report(workspace: str, output: str | None):
+    """Generate a markdown report summarizing the optimization run."""
+    from datetime import datetime
+
+    from poly_harness.workspace import Workspace
+
+    ws = Workspace(workspace)
+    if not ws.is_initialized():
+        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        raise SystemExit(1)
+
+    log = ws.search_log()
+    if not log.entries:
+        console.print("No iterations recorded yet. Run 'ph run' to start.")
+        return
+
+    config = ws.load_config()
+    entries = log.entries
+    best_i = log.best_iteration
+    best_s = log.best_score
+    base_s = entries[0].score if entries else 0.0
+    total = len(entries)
+
+    # Elapsed
+    elapsed_str = "N/A"
+    try:
+        t0 = datetime.fromisoformat(entries[0].timestamp)
+        t1 = datetime.fromisoformat(entries[-1].timestamp)
+        elapsed = t1 - t0
+        mins = elapsed.total_seconds() / 60
+        elapsed_str = f"{mins:.1f} min" if mins >= 1 else f"{elapsed.total_seconds():.0f}s"
+    except (ValueError, AttributeError):
+        pass
+
+    # Improvement stats
+    improved_count = sum(1 for e in entries[1:] if e.score > base_s)
+    improvement_rate = improved_count / (total - 1) if total > 1 else 0.0
+
+    # Build markdown
+    lines: list[str] = []
+    lines.append("# PolyHarness Optimization Report\n")
+    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+
+    lines.append("## Configuration\n")
+    lines.append(f"| Parameter | Value |")
+    lines.append(f"|-----------|-------|")
+    lines.append(f"| Backend | {config.proposer.backend} |")
+    lines.append(f"| Model | {config.proposer.model} |")
+    lines.append(f"| Max iterations | {config.search.max_iterations} |")
+    lines.append(f"| Early stop patience | {config.search.early_stop_patience} |")
+    lines.append(f"| Parent selection | {config.search.parent_selection} |")
+    lines.append(f"| Evaluator | {config.evaluator.type} ({config.evaluator.entry}) |")
+    lines.append("")
+
+    lines.append("## Results Summary\n")
+    lines.append(f"| Metric | Value |")
+    lines.append(f"|--------|-------|")
+    lines.append(f"| Total iterations | {total} |")
+    lines.append(f"| Base score | {base_s:.4f} |")
+    lines.append(f"| Best score | {best_s:.4f} (iter_{best_i}) |")
+    lines.append(f"| Improvement | +{best_s - base_s:.4f} ({(best_s - base_s) / base_s * 100:.1f}%) |" if base_s > 0 else f"| Improvement | +{best_s - base_s:.4f} |")
+    lines.append(f"| Improvement rate | {improvement_rate:.0%} ({improved_count}/{total - 1}) |" if total > 1 else "| Improvement rate | N/A |")
+    lines.append(f"| Elapsed | {elapsed_str} |")
+    lines.append("")
+
+    # Iteration log table
+    lines.append("## Iteration Log\n")
+    lines.append("| # | Parent | Score | Best | Δ vs Parent |")
+    lines.append("|---|--------|-------|------|-------------|")
+
+    parent_scores = {e.iteration: e.score for e in entries}
+    for e in entries:
+        parent_str = f"iter_{e.parent}" if e.parent is not None else "—"
+        delta = ""
+        if e.parent is not None and e.parent in parent_scores:
+            d = e.score - parent_scores[e.parent]
+            delta = f"+{d:.4f}" if d >= 0 else f"{d:.4f}"
+        best_marker = " **★**" if e.iteration == best_i else ""
+        lines.append(
+            f"| iter_{e.iteration}{best_marker} | {parent_str} | {e.score:.4f} | {e.best_so_far:.4f} | {delta} |"
+        )
+    lines.append("")
+
+    # Task-level breakdown (if available)
+    all_tasks: set[str] = set()
+    for e in entries:
+        all_tasks.update(e.task_scores.keys())
+
+    if all_tasks:
+        task_names = sorted(all_tasks)
+        lines.append("## Per-Task Scores\n")
+        header = "| Iteration |" + " | ".join(task_names) + " |"
+        sep = "|-----------|" + " | ".join("-----" for _ in task_names) + " |"
+        lines.append(header)
+        lines.append(sep)
+
+        for e in entries:
+            row_parts = [f"iter_{e.iteration}"]
+            for tn in task_names:
+                val = e.task_scores.get(tn)
+                row_parts.append(f"{val:.4f}" if val is not None else "—")
+            lines.append("| " + " | ".join(row_parts) + " |")
+        lines.append("")
+
+    # Score trend (ASCII sparkline)
+    lines.append("## Score Trend\n")
+    lines.append("```")
+    scores = [e.score for e in entries]
+    max_s = max(scores) if scores else 1.0
+    min_s = min(scores) if scores else 0.0
+    range_s = max_s - min_s if max_s > min_s else 1.0
+    bar_width = 40
+    for e in entries:
+        bar_len = int((e.score - min_s) / range_s * bar_width)
+        bar = "█" * bar_len + "░" * (bar_width - bar_len)
+        marker = " ★" if e.iteration == best_i else ""
+        lines.append(f"iter_{e.iteration:>2} |{bar}| {e.score:.4f}{marker}")
+    lines.append("```\n")
+
+    md_content = "\n".join(lines)
+
+    # Write to file
+    out_path = Path(output) if output else ws.summary_dir / "report.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(md_content)
+
+    console.print(f"[green]Report written to {out_path}[/green]")
+    console.print(f"  {total} iterations, best={best_s:.4f} (iter_{best_i}), Δ={best_s - base_s:+.4f}")
 
 
 def _load_score(candidate_dir: Path) -> dict:

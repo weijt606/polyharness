@@ -292,3 +292,164 @@ def test_diff_shows_comparison(runner, workspace):
     assert result.exit_code == 0
     assert "iter_0" in result.output
     assert "iter_1" in result.output
+
+
+# --- ph run --strategy ---
+
+
+def test_run_strategy_flag_in_help(runner):
+    result = runner.invoke(main, ["run", "--help"])
+    assert result.exit_code == 0
+    assert "--strategy" in result.output
+
+
+# --- ph leaderboard ---
+
+
+def test_leaderboard_help(runner):
+    result = runner.invoke(main, ["leaderboard", "--help"])
+    assert result.exit_code == 0
+    assert "--top" in result.output
+    assert "--tasks" in result.output
+
+
+def test_leaderboard_basic(runner, workspace):
+    from poly_harness.search_log import SearchLog
+    log = SearchLog(workspace.search_log_path)
+    log.append(iteration=0, parent=None, score=0.3, task_scores={"t1": 0.3})
+    log.append(iteration=1, parent=0, score=0.7, task_scores={"t1": 0.7})
+    log.append(iteration=2, parent=0, score=0.5, task_scores={"t1": 0.5})
+
+    result = runner.invoke(main, ["leaderboard", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "iter_1" in result.output
+    assert "★" in result.output
+
+
+def test_leaderboard_top_n(runner, workspace):
+    from poly_harness.search_log import SearchLog
+    log = SearchLog(workspace.search_log_path)
+    log.append(iteration=0, parent=None, score=0.3, task_scores={})
+    log.append(iteration=1, parent=0, score=0.7, task_scores={})
+    log.append(iteration=2, parent=0, score=0.5, task_scores={})
+
+    result = runner.invoke(main, ["leaderboard", "--workspace", str(workspace.root), "-n", "2"])
+    assert result.exit_code == 0
+    # Rank 1 and 2 shown, but not necessarily rank 3 (iter_0 at 0.3)
+    assert "iter_1" in result.output
+
+
+def test_leaderboard_with_tasks(runner, workspace):
+    from poly_harness.search_log import SearchLog
+    log = SearchLog(workspace.search_log_path)
+    log.append(iteration=0, parent=None, score=0.3, task_scores={"task_a": 0.2, "task_b": 0.4})
+    log.append(iteration=1, parent=0, score=0.7, task_scores={"task_a": 0.8, "task_b": 0.6})
+
+    result = runner.invoke(main, ["leaderboard", "--workspace", str(workspace.root), "--tasks"])
+    assert result.exit_code == 0
+    assert "task_a" in result.output
+    assert "task_b" in result.output
+
+
+# --- ph trace ---
+
+
+def test_trace_help(runner):
+    result = runner.invoke(main, ["trace", "--help"])
+    assert result.exit_code == 0
+    assert "ITERATION" in result.output
+
+
+def test_trace_shows_output(runner, workspace):
+    """ph trace should display stdout/stderr from evaluation."""
+    cand = workspace.candidates_dir / "iter_1"
+    cand.mkdir(parents=True, exist_ok=True)
+    (cand / "score.json").write_text(json.dumps({"overall_score": 0.5}))
+    traces = cand / "traces"
+    traces.mkdir()
+    (traces / "default.stdout").write_text("Hello from evaluator\n")
+    (traces / "default.stderr").write_text("Warning: something\n")
+    (traces / "default.exitcode").write_text("0\n")
+    (traces / "default.metrics.json").write_text(json.dumps({"score": 0.5}))
+
+    result = runner.invoke(main, ["trace", "1", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "Hello from evaluator" in result.output
+    assert "Warning: something" in result.output
+
+
+def test_trace_no_traces(runner, workspace):
+    cand = workspace.candidates_dir / "iter_1"
+    cand.mkdir(parents=True, exist_ok=True)
+
+    result = runner.invoke(main, ["trace", "1", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "No traces" in result.output
+
+
+def test_trace_task_filter(runner, workspace):
+    """--task should filter to a specific task."""
+    cand = workspace.candidates_dir / "iter_1"
+    cand.mkdir(parents=True, exist_ok=True)
+    traces = cand / "traces"
+    traces.mkdir()
+    (traces / "task_a.stdout").write_text("output A\n")
+    (traces / "task_b.stdout").write_text("output B\n")
+    (traces / "task_a.exitcode").write_text("0\n")
+    (traces / "task_b.exitcode").write_text("0\n")
+
+    result = runner.invoke(main, ["trace", "1", "--workspace", str(workspace.root), "--task", "task_a"])
+    assert result.exit_code == 0
+    assert "output A" in result.output
+    # task_b should NOT appear
+    assert "output B" not in result.output
+
+
+# --- ph report ---
+
+
+def test_report_help(runner):
+    result = runner.invoke(main, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--output" in result.output
+
+
+def test_report_generates_markdown(runner, workspace):
+    import json as _json
+
+    entries = [
+        {"iteration": 0, "parent": None, "score": 0.3, "best_so_far": 0.3,
+         "timestamp": "2025-01-01T00:00:00", "task_scores": {"t1": 0.3}},
+        {"iteration": 1, "parent": 0, "score": 0.5, "best_so_far": 0.5,
+         "timestamp": "2025-01-01T00:03:00", "task_scores": {"t1": 0.5}},
+        {"iteration": 2, "parent": 1, "score": 0.8, "best_so_far": 0.8,
+         "timestamp": "2025-01-01T00:06:00", "task_scores": {"t1": 0.8}},
+    ]
+    with open(workspace.search_log_path, "w") as f:
+        for e in entries:
+            f.write(_json.dumps(e) + "\n")
+
+    result = runner.invoke(main, ["report", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+
+    report_path = workspace.summary_dir / "report.md"
+    assert report_path.exists()
+    content = report_path.read_text()
+    assert "# PolyHarness Optimization Report" in content
+    assert "iter_2" in content
+    assert "0.8000" in content
+    assert "Score Trend" in content
+
+
+def test_report_custom_output(runner, workspace, tmp_path):
+    from poly_harness.search_log import SearchLog
+    log = SearchLog(workspace.search_log_path)
+    log.append(iteration=0, parent=None, score=0.3, task_scores={})
+    log.append(iteration=1, parent=0, score=0.5, task_scores={})
+
+    out_path = tmp_path / "custom_report.md"
+    result = runner.invoke(main, ["report", "--workspace", str(workspace.root), "-o", str(out_path)])
+    assert result.exit_code == 0
+    assert out_path.exists()
+    assert "PolyHarness" in out_path.read_text()
