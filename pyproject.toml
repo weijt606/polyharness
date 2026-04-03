@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "poly-harness"
+version = "0.1.0"
+description = "Automated harness optimization for AI agents — make your agent evolve."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "weijt606" },
+]
+keywords = ["agent", "harness", "optimization", "meta-harness", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "click>=8.0",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+docker = ["docker>=7.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff",
+]
+
+[project.scripts]
+ph = "poly_harness.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/weijt606/poly-harness"
+Repository = "https://github.com/weijt606/poly-harness"
+Issues = "https://github.com/weijt606/poly-harness/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/poly_harness"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

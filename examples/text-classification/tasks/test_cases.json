@@ -1,0 +1,22 @@
+[
+  {"text": "I love this product, it's great!", "label": "positive"},
+  {"text": "This is terrible, I hate it.", "label": "negative"},
+  {"text": "The weather is nice today.", "label": "neutral"},
+  {"text": "Excellent work, very happy with the results.", "label": "positive"},
+  {"text": "Awful experience, really bad service.", "label": "negative"},
+  {"text": "The meeting is at 3pm.", "label": "neutral"},
+  {"text": "I'm so sad about what happened.", "label": "negative"},
+  {"text": "What a wonderful surprise!", "label": "positive"},
+  {"text": "The report contains the quarterly figures.", "label": "neutral"},
+  {"text": "Pretty good but could be better.", "label": "positive"},
+  {"text": "Not bad, not great, just okay.", "label": "neutral"},
+  {"text": "This made my day, absolutely fantastic!", "label": "positive"},
+  {"text": "Disappointing results, very frustrating.", "label": "negative"},
+  {"text": "The package arrived on Tuesday.", "label": "neutral"},
+  {"text": "Amazing quality and fast shipping!", "label": "positive"},
+  {"text": "Worst purchase I've ever made.", "label": "negative"},
+  {"text": "The instructions were clear and easy to follow.", "label": "neutral"},
+  {"text": "I'm thrilled with this outcome!", "label": "positive"},
+  {"text": "Complete waste of money.", "label": "negative"},
+  {"text": "Please send the updated document.", "label": "neutral"}
+]

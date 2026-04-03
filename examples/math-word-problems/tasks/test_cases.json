@@ -1,0 +1,22 @@
+[
+  {"question": "A store sells apples for $2 each. If Mary buys 5 apples, how much does she pay?", "answer": 10},
+  {"question": "A train travels at 60 miles per hour. How far does it travel in 3 hours?", "answer": 180},
+  {"question": "John has 15 marbles. He gives 4 to Sarah and 3 to Tom. How many does he have left?", "answer": 8},
+  {"question": "A rectangle has a length of 8 cm and a width of 5 cm. What is its area?", "answer": 40},
+  {"question": "If a shirt costs $25 and is on sale for 20% off, what is the sale price?", "answer": 20},
+  {"question": "A baker makes 12 cookies per batch. How many cookies does he make in 7 batches?", "answer": 84},
+  {"question": "Lisa reads 30 pages per day. How many pages does she read in 2 weeks?", "answer": 420},
+  {"question": "A parking lot has 4 rows with 15 spaces each. How many spaces total?", "answer": 60},
+  {"question": "Sam scored 85, 92, and 78 on three tests. What is his average score?", "answer": 85},
+  {"question": "A rope is 120 cm long. If you cut it into 8 equal pieces, how long is each piece?", "answer": 15},
+  {"question": "There are 3 boxes, each containing 24 pencils. How many pencils in total?", "answer": 72},
+  {"question": "A car uses 8 liters of fuel per 100 km. How many liters for 350 km?", "answer": 28},
+  {"question": "If 5 workers can paint a fence in 6 hours, how many worker-hours is that?", "answer": 30},
+  {"question": "A square garden has a perimeter of 48 meters. What is the length of one side?", "answer": 12},
+  {"question": "Emma earns $15 per hour. She works 8 hours on Monday and 6 hours on Tuesday. How much does she earn in total?", "answer": 210},
+  {"question": "A library has 5 shelves. The first shelf has 30 books, and each subsequent shelf has 5 more books than the previous one. How many books are on the last shelf?", "answer": 50},
+  {"question": "A school bus can carry 45 students. If there are 200 students, how many full buses are needed?", "answer": 5},
+  {"question": "Tom buys 3 notebooks at $4 each and 2 pens at $1.50 each. What is the total cost?", "answer": 15},
+  {"question": "A tank is filled at a rate of 5 liters per minute. How many minutes to fill a 200-liter tank?", "answer": 40},
+  {"question": "If the temperature drops from 15°C by 22 degrees, what is the new temperature in °C?", "answer": -7}
+]

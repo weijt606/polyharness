@@ -1,0 +1,23 @@
+{
+  "name": "poly-harness",
+  "version": "0.1.0",
+  "description": "Make your AI Agent evolve automatically — performance optimization layer for the Agent ecosystem.",
+  "keywords": ["agent", "harness", "optimization", "meta-harness", "cli"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weijt606/poly-harness.git"
+  },
+  "bin": {
+    "ph": "./bin/ph.mjs"
+  },
+  "files": [
+    "bin/"
+  ],
+  "scripts": {
+    "postinstall": "node bin/postinstall.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
