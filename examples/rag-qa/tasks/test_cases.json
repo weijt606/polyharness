@@ -1,0 +1,156 @@
+{
+  "knowledge_base": [
+    {
+      "id": "doc_01",
+      "title": "Python History",
+      "content": "Python was created by Guido van Rossum and first released in 1991. It emphasizes code readability and supports multiple programming paradigms including procedural, object-oriented, and functional programming."
+    },
+    {
+      "id": "doc_02",
+      "title": "Solar System",
+      "content": "The Solar System has eight planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. Jupiter is the largest planet, with a mass more than twice that of all other planets combined."
+    },
+    {
+      "id": "doc_03",
+      "title": "Photosynthesis",
+      "content": "Photosynthesis is the process by which green plants convert sunlight, water, and carbon dioxide into glucose and oxygen. It takes place primarily in the leaves, within organelles called chloroplasts."
+    },
+    {
+      "id": "doc_04",
+      "title": "HTTP Protocol",
+      "content": "HTTP (Hypertext Transfer Protocol) is the foundation of data communication on the World Wide Web. The most common HTTP methods are GET, POST, PUT, and DELETE. HTTPS adds encryption via TLS/SSL."
+    },
+    {
+      "id": "doc_05",
+      "title": "Machine Learning Basics",
+      "content": "Machine learning is a subset of artificial intelligence where models learn from data. The three main types are supervised learning, unsupervised learning, and reinforcement learning. Common algorithms include decision trees, neural networks, and support vector machines."
+    },
+    {
+      "id": "doc_06",
+      "title": "DNA Structure",
+      "content": "DNA is a double helix composed of nucleotides containing four bases: adenine (A), thymine (T), guanine (G), and cytosine (C). Adenine pairs with thymine, and guanine pairs with cytosine. The human genome contains approximately 3 billion base pairs."
+    },
+    {
+      "id": "doc_07",
+      "title": "Git Version Control",
+      "content": "Git is a distributed version control system created by Linus Torvalds in 2005. Key commands include git init, git add, git commit, git push, and git pull. Branches allow parallel development, and merging combines work from different branches."
+    },
+    {
+      "id": "doc_08",
+      "title": "Water Cycle",
+      "content": "The water cycle describes the continuous movement of water on Earth. It includes evaporation from oceans and lakes, condensation forming clouds, precipitation as rain or snow, and collection in bodies of water. Transpiration from plants also contributes."
+    },
+    {
+      "id": "doc_09",
+      "title": "REST API Design",
+      "content": "REST (Representational State Transfer) is an architectural style for designing web APIs. Key principles include statelessness, uniform interface, resource-based URLs, and using standard HTTP methods. Responses typically use JSON format."
+    },
+    {
+      "id": "doc_10",
+      "title": "Roman Empire",
+      "content": "The Roman Empire was founded in 27 BC when Augustus became the first emperor. At its peak under Trajan (117 AD), it controlled the Mediterranean region, Western Europe, and parts of the Middle East. The Western Roman Empire fell in 476 AD."
+    }
+  ],
+  "test_cases": [
+    {
+      "question": "Who created Python?",
+      "expected_answer": "Guido van Rossum",
+      "expected_source": "doc_01"
+    },
+    {
+      "question": "When was Python first released?",
+      "expected_answer": "1991",
+      "expected_source": "doc_01"
+    },
+    {
+      "question": "What is the largest planet in the Solar System?",
+      "expected_answer": "Jupiter",
+      "expected_source": "doc_02"
+    },
+    {
+      "question": "How many planets are in the Solar System?",
+      "expected_answer": "eight",
+      "expected_source": "doc_02"
+    },
+    {
+      "question": "Where does photosynthesis take place?",
+      "expected_answer": "chloroplasts",
+      "expected_source": "doc_03"
+    },
+    {
+      "question": "What do plants produce through photosynthesis?",
+      "expected_answer": "glucose and oxygen",
+      "expected_source": "doc_03"
+    },
+    {
+      "question": "What are the common HTTP methods?",
+      "expected_answer": "GET, POST, PUT, and DELETE",
+      "expected_source": "doc_04"
+    },
+    {
+      "question": "What does HTTPS add to HTTP?",
+      "expected_answer": "encryption via TLS/SSL",
+      "expected_source": "doc_04"
+    },
+    {
+      "question": "What are the three main types of machine learning?",
+      "expected_answer": "supervised learning, unsupervised learning, and reinforcement learning",
+      "expected_source": "doc_05"
+    },
+    {
+      "question": "How many base pairs are in the human genome?",
+      "expected_answer": "3 billion",
+      "expected_source": "doc_06"
+    },
+    {
+      "question": "What bases pair with each other in DNA?",
+      "expected_answer": "adenine pairs with thymine, and guanine pairs with cytosine",
+      "expected_source": "doc_06"
+    },
+    {
+      "question": "Who created Git?",
+      "expected_answer": "Linus Torvalds",
+      "expected_source": "doc_07"
+    },
+    {
+      "question": "When was Git created?",
+      "expected_answer": "2005",
+      "expected_source": "doc_07"
+    },
+    {
+      "question": "What are the stages of the water cycle?",
+      "expected_answer": "evaporation, condensation, precipitation, and collection",
+      "expected_source": "doc_08"
+    },
+    {
+      "question": "What is REST?",
+      "expected_answer": "an architectural style for designing web APIs",
+      "expected_source": "doc_09"
+    },
+    {
+      "question": "What format do REST responses typically use?",
+      "expected_answer": "JSON",
+      "expected_source": "doc_09"
+    },
+    {
+      "question": "When was the Roman Empire founded?",
+      "expected_answer": "27 BC",
+      "expected_source": "doc_10"
+    },
+    {
+      "question": "Who was the first Roman emperor?",
+      "expected_answer": "Augustus",
+      "expected_source": "doc_10"
+    },
+    {
+      "question": "When did the Western Roman Empire fall?",
+      "expected_answer": "476 AD",
+      "expected_source": "doc_10"
+    },
+    {
+      "question": "What programming paradigms does Python support?",
+      "expected_answer": "procedural, object-oriented, and functional",
+      "expected_source": "doc_01"
+    }
+  ]
+}

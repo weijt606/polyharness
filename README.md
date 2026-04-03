@@ -307,6 +307,39 @@ ph run --workspace .ws --max-iterations 5
 # (naive multiply → operation detection → averages/% → multi-step reasoning)
 ```
 
+### Code Generation (function synthesis)
+
+```bash
+cd examples/code-generation
+ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
+ph run --workspace .ws --max-iterations 5
+
+# iter_0: 0.27 → iter_1: 0.50 → iter_2: 0.68 → iter_3: 0.95 ★
+# (5 keywords → 10 patterns → composite logic → comprehensive coverage)
+```
+
+### API Calling (endpoint routing + parameter extraction)
+
+```bash
+cd examples/api-calling
+ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
+ph run --workspace .ws --max-iterations 5
+
+# iter_0: 0.19 → iter_1: 0.55 → iter_2: 0.77 → iter_3: 0.87 ★
+# (keyword matching → broad routing → param helpers → full regex extraction)
+```
+
+### RAG Question Answering (retrieval + answer extraction)
+
+```bash
+cd examples/rag-qa
+ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
+ph run --workspace .ws --max-iterations 5
+
+# iter_0: 0.51 → iter_1: 0.79 ★
+# (word overlap → stopword-filtered retrieval + sentence scoring)
+```
+
 ---
 
 ## Project Structure
@@ -324,7 +357,7 @@ src/poly_harness/
 ├── proposer/
 │   ├── api_proposer.py      # Anthropic API direct + tool-use loop
 │   ├── cli_proposer.py      # CLIProposer — unified subprocess management
-│   ├── local_proposer.py    # Offline rule-based (text + math)
+│   ├── local_proposer.py    # Offline rule-based (5 task types)
 │   └── adapters/            # Per-agent CLI adapters
 │       ├── claude_code.py   # claude -p
 │       ├── claw_code.py     # claw -p
@@ -337,9 +370,12 @@ bin/
 
 examples/
 ├── text-classification/     # 20 test cases
-└── math-word-problems/      # 20 test cases
+├── math-word-problems/      # 20 test cases
+├── code-generation/         # 20 tasks × 3 inputs
+├── api-calling/             # 20 test cases
+└── rag-qa/                  # 20 QA pairs + 10-doc knowledge base
 
-tests/                       # 80 tests (pytest)
+tests/                       # 86 tests (pytest)
 ```
 
 ## Local Development

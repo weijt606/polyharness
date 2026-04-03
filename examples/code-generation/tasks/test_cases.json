@@ -1,0 +1,102 @@
+[
+  {
+    "description": "Return the sum of all numbers in the list",
+    "test_inputs": [[1, 2, 3], [10, -5, 3], [0]],
+    "expected_outputs": [6, 8, 0]
+  },
+  {
+    "description": "Return the maximum value in the list",
+    "test_inputs": [[1, 5, 3], [-1, -5, -3], [42]],
+    "expected_outputs": [5, -1, 42]
+  },
+  {
+    "description": "Return the list in reverse order",
+    "test_inputs": [[1, 2, 3], ["a", "b", "c"], [1]],
+    "expected_outputs": [[3, 2, 1], ["c", "b", "a"], [1]]
+  },
+  {
+    "description": "Return the list sorted in ascending order",
+    "test_inputs": [[3, 1, 2], [5, -1, 0], [1]],
+    "expected_outputs": [[1, 2, 3], [-1, 0, 5], [1]]
+  },
+  {
+    "description": "Return the number of elements in the list",
+    "test_inputs": [[1, 2, 3], [], [1, 1, 1, 1]],
+    "expected_outputs": [3, 0, 4]
+  },
+  {
+    "description": "Return the minimum value in the list",
+    "test_inputs": [[1, 5, 3], [-1, -5, -3], [42]],
+    "expected_outputs": [1, -5, 42]
+  },
+  {
+    "description": "Return the product of all numbers in the list",
+    "test_inputs": [[2, 3, 4], [1, 5, -2], [7]],
+    "expected_outputs": [24, -10, 7]
+  },
+  {
+    "description": "Return only the even numbers from the list",
+    "test_inputs": [[1, 2, 3, 4], [7, 8, 9], [2, 4, 6]],
+    "expected_outputs": [[2, 4], [8], [2, 4, 6]]
+  },
+  {
+    "description": "Return only the unique elements from the list preserving order",
+    "test_inputs": [[1, 2, 2, 3, 1], ["a", "b", "a"], [1]],
+    "expected_outputs": [[1, 2, 3], ["a", "b"], [1]]
+  },
+  {
+    "description": "Return the list with each element doubled",
+    "test_inputs": [[1, 2, 3], [0, -1, 5], [10]],
+    "expected_outputs": [[2, 4, 6], [0, -2, 10], [20]]
+  },
+  {
+    "description": "Return the second largest value in the list",
+    "test_inputs": [[1, 5, 3], [10, 20, 15], [7, 7, 7]],
+    "expected_outputs": [3, 15, 7]
+  },
+  {
+    "description": "Return True if the list is sorted in ascending order, False otherwise",
+    "test_inputs": [[1, 2, 3], [3, 1, 2], [1]],
+    "expected_outputs": [true, false, true]
+  },
+  {
+    "description": "Return a flattened version of a nested list",
+    "test_inputs": [[[1, [2, 3]], [4]], [[1], [2, [3, [4]]]], [[5]]],
+    "expected_outputs": [[1, 2, 3, 4], [1, 2, 3, 4], [5]]
+  },
+  {
+    "description": "Return the running cumulative sum of the list",
+    "test_inputs": [[1, 2, 3], [5, -1, 2], [10]],
+    "expected_outputs": [[1, 3, 6], [5, 4, 6], [10]]
+  },
+  {
+    "description": "Return a dictionary counting occurrences of each element",
+    "test_inputs": [["a", "b", "a", "c", "b", "a"], [1, 1, 2], ["x"]],
+    "expected_outputs": [{"a": 3, "b": 2, "c": 1}, {"1": 2, "2": 1}, {"x": 1}]
+  },
+  {
+    "description": "Return the list rotated left by one position",
+    "test_inputs": [[1, 2, 3, 4], ["a", "b", "c"], [1]],
+    "expected_outputs": [[2, 3, 4, 1], ["b", "c", "a"], [1]]
+  },
+  {
+    "description": "Return the intersection of two sorted lists",
+    "test_inputs": [[[1, 2, 3], [2, 3, 4]], [[1, 5], [5, 10]], [[], [1, 2]]],
+    "expected_outputs": [[2, 3], [5], []]
+  },
+  {
+    "description": "Return the string with each word capitalized",
+    "test_inputs": ["hello world", "foo bar baz", "ALREADY CAPS"],
+    "expected_outputs": ["Hello World", "Foo Bar Baz", "Already Caps"]
+  },
+  {
+    "description": "Return True if the string is a palindrome ignoring case and spaces",
+    "test_inputs": ["racecar", "A man a plan a canal Panama", "hello"],
+    "expected_outputs": [true, true, false]
+  },
+  {
+    "description": "Return the Fibonacci sequence up to n terms",
+    "test_inputs": [5, 1, 8],
+    "expected_outputs": [[0, 1, 1, 2, 3], [0], [0, 1, 1, 2, 3, 5, 8, 13]]
+  }
+]

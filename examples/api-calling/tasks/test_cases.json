@@ -1,0 +1,102 @@
+[
+  {
+    "query": "What's the weather like in Tokyo?",
+    "expected_endpoint": "get_weather",
+    "expected_params": {"city": "Tokyo"}
+  },
+  {
+    "query": "Find me wireless headphones under $50",
+    "expected_endpoint": "search_products",
+    "expected_params": {"query": "wireless headphones under $50", "max_results": 10}
+  },
+  {
+    "query": "Show me John's profile",
+    "expected_endpoint": "get_user_profile",
+    "expected_params": {"username": "John"}
+  },
+  {
+    "query": "Send an email to alice@example.com about the meeting tomorrow",
+    "expected_endpoint": "send_email",
+    "expected_params": {"to": "alice@example.com", "subject": "meeting tomorrow", "body": ""}
+  },
+  {
+    "query": "Schedule a team lunch on Friday at noon",
+    "expected_endpoint": "create_calendar_event",
+    "expected_params": {"title": "team lunch", "date": "Friday", "time": "noon"}
+  },
+  {
+    "query": "Translate 'hello world' to Spanish",
+    "expected_endpoint": "translate_text",
+    "expected_params": {"text": "hello world", "target_language": "Spanish"}
+  },
+  {
+    "query": "What's the current price of AAPL stock?",
+    "expected_endpoint": "get_stock_price",
+    "expected_params": {"symbol": "AAPL"}
+  },
+  {
+    "query": "Remind me to call the dentist at 3pm",
+    "expected_endpoint": "set_reminder",
+    "expected_params": {"message": "call the dentist", "time": "3pm"}
+  },
+  {
+    "query": "How's the weather in Paris today?",
+    "expected_endpoint": "get_weather",
+    "expected_params": {"city": "Paris"}
+  },
+  {
+    "query": "Search for running shoes",
+    "expected_endpoint": "search_products",
+    "expected_params": {"query": "running shoes", "max_results": 10}
+  },
+  {
+    "query": "Look up the profile for user_sarah",
+    "expected_endpoint": "get_user_profile",
+    "expected_params": {"username": "user_sarah"}
+  },
+  {
+    "query": "Email bob@corp.com the project update",
+    "expected_endpoint": "send_email",
+    "expected_params": {"to": "bob@corp.com", "subject": "project update", "body": ""}
+  },
+  {
+    "query": "Book a meeting called Sprint Review on Monday at 10am",
+    "expected_endpoint": "create_calendar_event",
+    "expected_params": {"title": "Sprint Review", "date": "Monday", "time": "10am"}
+  },
+  {
+    "query": "How do you say 'thank you' in French?",
+    "expected_endpoint": "translate_text",
+    "expected_params": {"text": "thank you", "target_language": "French"}
+  },
+  {
+    "query": "Check TSLA stock price",
+    "expected_endpoint": "get_stock_price",
+    "expected_params": {"symbol": "TSLA"}
+  },
+  {
+    "query": "Set a reminder: pick up groceries at 5pm",
+    "expected_endpoint": "set_reminder",
+    "expected_params": {"message": "pick up groceries", "time": "5pm"}
+  },
+  {
+    "query": "What temperature is it in London?",
+    "expected_endpoint": "get_weather",
+    "expected_params": {"city": "London"}
+  },
+  {
+    "query": "I need a new laptop, show me options",
+    "expected_endpoint": "search_products",
+    "expected_params": {"query": "laptop", "max_results": 10}
+  },
+  {
+    "query": "Convert 'good morning' to Japanese",
+    "expected_endpoint": "translate_text",
+    "expected_params": {"text": "good morning", "target_language": "Japanese"}
+  },
+  {
+    "query": "Add a dentist appointment on Wednesday at 2:30pm",
+    "expected_endpoint": "create_calendar_event",
+    "expected_params": {"title": "dentist appointment", "date": "Wednesday", "time": "2:30pm"}
+  }
+]

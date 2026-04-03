@@ -305,6 +305,39 @@ ph run --workspace .ws --max-iterations 5
 # (朴素乘法 → 运算检测 → 均值/百分比 → 多步推理)
 ```
 
+### 代码生成（函数合成）
+
+```bash
+cd examples/code-generation
+ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
+ph run --workspace .ws --max-iterations 5
+
+# iter_0: 0.27 → iter_1: 0.50 → iter_2: 0.68 → iter_3: 0.95 ★
+# （5 个关键词 → 10 种模式 → 复合逻辑 → 全面覆盖）
+```
+
+### API 调用（端点路由 + 参数提取）
+
+```bash
+cd examples/api-calling
+ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
+ph run --workspace .ws --max-iterations 5
+
+# iter_0: 0.19 → iter_1: 0.55 → iter_2: 0.77 → iter_3: 0.87 ★
+# （关键词匹配 → 宽泛路由 → 参数辅助 → 完整正则提取）
+```
+
+### RAG 问答（检索 + 答案抽取）
+
+```bash
+cd examples/rag-qa
+ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
+ph run --workspace .ws --max-iterations 5
+
+# iter_0: 0.51 → iter_1: 0.79 ★
+# （词重叠 → 停用词过滤检索 + 句子评分）
+```
+
 ---
 
 ## 项目结构
@@ -322,7 +355,7 @@ src/poly_harness/
 ├── proposer/
 │   ├── api_proposer.py      # Anthropic API 直连 + tool-use 循环
 │   ├── cli_proposer.py      # CLIProposer — 统一子进程管理
-│   ├── local_proposer.py    # 离线规则引擎（文本 + 数学）
+│   ├── local_proposer.py    # 离线规则引擎（5 种任务类型）
 │   └── adapters/            # 逐 agent CLI 适配器
 │       ├── claude_code.py   # claude -p
 │       ├── claw_code.py     # claw -p
@@ -335,9 +368,12 @@ bin/
 
 examples/
 ├── text-classification/     # 20 个测试用例
-└── math-word-problems/      # 20 个测试用例
+├── math-word-problems/      # 20 个测试用例
+├── code-generation/         # 20 个任务 × 3 组输入
+├── api-calling/             # 20 个测试用例
+└── rag-qa/                  # 20 个 QA 对 + 10 篇知识库文档
 
-tests/                       # 80 个测试 (pytest)
+tests/                       # 86 个测试 (pytest)
 ```
 
 ## 本地开发
