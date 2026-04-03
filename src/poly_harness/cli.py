@@ -97,7 +97,14 @@ def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | No
 )
 @click.option("--max-iterations", type=int, default=None, help="Override max iterations.")
 @click.option("--dry-run", is_flag=True, help="Only evaluate base harness, don't start search.")
-def run(workspace: str, max_iterations: int | None, dry_run: bool):
+@click.option("--resume", is_flag=True, help="Resume an interrupted search from where it left off.")
+@click.option(
+    "--backend",
+    type=click.Choice(["api", "claude-code", "claw-code", "codex", "opencode", "local"], case_sensitive=False),
+    default=None,
+    help="Override proposer backend without editing config.",
+)
+def run(workspace: str, max_iterations: int | None, dry_run: bool, resume: bool, backend: str | None):
     """Start the optimization search loop."""
     from poly_harness.config import PolyHarnessConfig
     from poly_harness.orchestrator import Orchestrator
@@ -112,11 +119,14 @@ def run(workspace: str, max_iterations: int | None, dry_run: bool):
     if max_iterations is not None:
         config.search.max_iterations = max_iterations
 
+    if backend is not None:
+        config.proposer.backend = backend  # type: ignore[assignment]
+
     if dry_run:
         config.search.max_iterations = 0
 
     orch = Orchestrator(workspace=ws, config=config)
-    orch.run()
+    orch.run(resume=resume)
 
 
 @main.command()
@@ -668,6 +678,132 @@ def clean(workspace: str, keep_best: bool, yes: bool):
             summary_dir.mkdir()
 
     console.print(f"[green]Cleaned {len(to_remove)} candidate(s) ({size_mb:.1f} MB freed)[/green]")
+
+
+# --- config command group ---
+
+
+@main.group(name="config")
+def config_group():
+    """View or modify workspace configuration."""
+    pass
+
+
+@config_group.command(name="show")
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".",
+    help="Workspace directory.",
+)
+def config_show(workspace: str):
+    """Display the current workspace configuration."""
+    import yaml
+
+    from poly_harness.workspace import Workspace
+
+    ws = Workspace(workspace)
+    if not ws.is_initialized():
+        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        raise SystemExit(1)
+
+    config = ws.load_config()
+    console.print(yaml.dump(config.model_dump(), default_flow_style=False, sort_keys=False).rstrip())
+
+
+@config_group.command(name="set")
+@click.argument("key")
+@click.argument("value")
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".",
+    help="Workspace directory.",
+)
+def config_set(key: str, value: str, workspace: str):
+    """Set a configuration value (dot-notation key).
+
+    Examples:
+
+      ph config set search.max_iterations 30
+
+      ph config set proposer.backend claude-code
+
+      ph config set proposer.temperature 0.5
+    """
+    import yaml
+
+    from poly_harness.workspace import Workspace
+
+    ws = Workspace(workspace)
+    if not ws.is_initialized():
+        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        raise SystemExit(1)
+
+    config_path = ws.root / ws.CONFIG_FILE
+    with open(config_path) as f:
+        data = yaml.safe_load(f) or {}
+
+    # Navigate dot-notation key
+    parts = key.split(".")
+    target = data
+    for part in parts[:-1]:
+        if part not in target or not isinstance(target[part], dict):
+            target[part] = {}
+        target = target[part]
+
+    # Auto-convert value types
+    final_key = parts[-1]
+    old_value = target.get(final_key)
+
+    if value.lower() in ("true", "false"):
+        converted = value.lower() == "true"
+    else:
+        try:
+            converted = int(value)
+        except ValueError:
+            try:
+                converted = float(value)
+            except ValueError:
+                converted = value
+
+    target[final_key] = converted
+
+    # Validate by loading the full config
+    from poly_harness.config import PolyHarnessConfig
+    try:
+        PolyHarnessConfig.model_validate(data)
+    except Exception as exc:
+        console.print(f"[red]Invalid configuration:[/red] {exc}")
+        raise SystemExit(1)
+
+    with open(config_path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+    console.print(f"[green]{key}:[/green] {old_value} → {converted}")
+
+
+# --- diff command ---
+
+
+@main.command()
+@click.argument("iteration", type=int)
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".",
+    help="Workspace directory.",
+)
+@click.option("--no-diff", is_flag=True, help="Skip code diff output.")
+def diff(iteration: int, workspace: str, no_diff: bool):
+    """Show score comparison and code diff between base (iter_0) and ITERATION.
+
+    This is a shorthand for: ph compare 0 <ITERATION>
+    """
+    from click import Context
+
+    ctx = Context(compare, info_name="diff")
+    ctx.invoke(compare, left="0", right=str(iteration), workspace=workspace, no_diff=no_diff)
 
 
 def _load_score(candidate_dir: Path) -> dict:

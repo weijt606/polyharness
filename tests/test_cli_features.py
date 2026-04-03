@@ -203,3 +203,92 @@ def test_log_shows_delta(runner, workspace):
     assert result.exit_code == 0
     # Delta column header or values should appear
     assert "Δ" in result.output or "delta" in result.output.lower() or "+0.2" in result.output
+
+
+# --- ph run --resume ---
+
+
+def test_run_resume_flag_in_help(runner):
+    result = runner.invoke(main, ["run", "--help"])
+    assert result.exit_code == 0
+    assert "--resume" in result.output
+
+
+# --- ph run --backend ---
+
+
+def test_run_backend_flag_in_help(runner):
+    result = runner.invoke(main, ["run", "--help"])
+    assert result.exit_code == 0
+    assert "--backend" in result.output
+
+
+# --- ph config show ---
+
+
+def test_config_show(runner, workspace):
+    result = runner.invoke(main, ["config", "show", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "search" in result.output
+    assert "proposer" in result.output
+    assert "evaluator" in result.output
+
+
+# --- ph config set ---
+
+
+def test_config_set(runner, workspace):
+    result = runner.invoke(main, ["config", "set", "search.max_iterations", "30",
+                                  "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "30" in result.output
+
+    # Verify the change persisted
+    config = workspace.load_config()
+    assert config.search.max_iterations == 30
+
+
+def test_config_set_invalid(runner, workspace):
+    """Setting an invalid value should fail with an error."""
+    result = runner.invoke(main, ["config", "set", "search.max_iterations", "-5",
+                                  "--workspace", str(workspace.root)])
+    assert result.exit_code != 0
+
+
+def test_config_set_backend(runner, workspace):
+    result = runner.invoke(main, ["config", "set", "proposer.backend", "claude-code",
+                                  "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    config = workspace.load_config()
+    assert config.proposer.backend == "claude-code"
+
+
+# --- ph diff ---
+
+
+def test_diff_help(runner):
+    result = runner.invoke(main, ["diff", "--help"])
+    assert result.exit_code == 0
+    assert "ITERATION" in result.output
+
+
+def test_diff_shows_comparison(runner, workspace):
+    """ph diff should compare base vs given iteration."""
+    for i in range(2):
+        d = workspace.candidates_dir / f"iter_{i}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "score.json").write_text(json.dumps({
+            "overall_score": 0.3 + i * 0.2,
+            "task_scores": {"t1": 0.3 + i * 0.2},
+        }))
+        (d / "harness.py").write_text(f"# iteration {i}\n")
+
+    from poly_harness.search_log import SearchLog
+    log = SearchLog(workspace.search_log_path)
+    log.append(iteration=0, parent=None, score=0.3, task_scores={"t1": 0.3})
+    log.append(iteration=1, parent=0, score=0.5, task_scores={"t1": 0.5})
+
+    result = runner.invoke(main, ["diff", "1", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "iter_0" in result.output
+    assert "iter_1" in result.output

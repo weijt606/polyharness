@@ -46,7 +46,7 @@ class Orchestrator:
         self.evaluator = evaluator or create_evaluator(config.evaluator, cwd=workspace.root)
         self.search_log = SearchLog(workspace.search_log_path)
 
-    def run(self) -> SearchResult:
+    def run(self, resume: bool = False) -> SearchResult:
         """Execute the full search loop."""
         max_iter = self.config.search.max_iterations
 
@@ -56,14 +56,43 @@ class Orchestrator:
         console.print(f"Proposer backend: {self.config.proposer.backend}")
         console.print()
 
-        # Step 0: Evaluate base harness
-        console.print("[bold]Step 0:[/bold] Evaluating base harness...")
-        base_result = self._evaluate_iteration(0, is_base=True)
-        best_score = base_result
+        # Determine starting point (resume or fresh)
+        start_iter = 1
+        best_score = 0.0
         best_iteration = 0
         patience_counter = 0
 
-        self._print_iteration(0, base_result, best_score, None)
+        if resume and len(self.search_log) > 0:
+            # Restore state from existing search log
+            entries = self.search_log.entries
+            best_score = self.search_log.best_score
+            best_iteration = self.search_log.best_iteration
+            start_iter = max(e.iteration for e in entries) + 1
+
+            # Recalculate patience_counter from tail of entries
+            patience_counter = 0
+            for e in reversed(entries):
+                if e.iteration == 0:
+                    break
+                if e.score <= best_score and e.score < best_score:
+                    patience_counter += 1
+                else:
+                    break
+
+            console.print(
+                f"[yellow]Resuming from iter_{start_iter - 1} "
+                f"(best={best_score:.4f} at iter_{best_iteration}, "
+                f"patience={patience_counter}/{self.config.search.early_stop_patience})[/yellow]"
+            )
+            console.print()
+        else:
+            # Step 0: Evaluate base harness
+            console.print("[bold]Step 0:[/bold] Evaluating base harness...")
+            base_result = self._evaluate_iteration(0, is_base=True)
+            best_score = base_result
+            best_iteration = 0
+
+            self._print_iteration(0, base_result, best_score, None)
 
         if max_iter == 0:
             console.print("\n[yellow]Dry run — base evaluation only.[/yellow]")
@@ -72,6 +101,17 @@ class Orchestrator:
                 best_score=best_score,
                 total_iterations=0,
             )
+
+        remaining = max_iter - (start_iter - 1)
+        if remaining <= 0:
+            console.print("[yellow]All iterations already completed.[/yellow]")
+            result = SearchResult(
+                best_iteration=best_iteration,
+                best_score=best_score,
+                total_iterations=len(self.search_log) - 1,
+            )
+            self._print_summary(result)
+            return result
 
         from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
@@ -84,27 +124,35 @@ class Orchestrator:
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task("Searching", total=max_iter, best=best_score)
+            task = progress.add_task("Searching", total=remaining, best=best_score)
 
-            for i in range(1, max_iter + 1):
+            for i in range(start_iter, max_iter + 1):
                 progress.update(task, description=f"iter_{i}")
 
-                # Step 1: Select parent
-                parent = self._select_parent()
+                try:
+                    # Step 1: Select parent
+                    parent = self._select_parent()
 
-                # Step 2: Prepare candidate directory (copy from parent)
-                cand_dir = self.workspace.prepare_candidate(i, parent)
+                    # Step 2: Prepare candidate directory (copy from parent)
+                    cand_dir = self.workspace.prepare_candidate(i, parent)
 
-                # Step 3: Proposer generates new candidate
-                metadata = self.proposer.propose(
-                    workspace_root=self.workspace.root,
-                    candidate_dir=cand_dir,
-                    iteration=i,
-                    parent=parent,
-                )
+                    # Step 3: Proposer generates new candidate
+                    metadata = self.proposer.propose(
+                        workspace_root=self.workspace.root,
+                        candidate_dir=cand_dir,
+                        iteration=i,
+                        parent=parent,
+                    )
 
-                # Step 4: Evaluate
-                score = self._evaluate_iteration(i)
+                    # Step 4: Evaluate
+                    score = self._evaluate_iteration(i)
+                except Exception as exc:
+                    console.print(f"\n[red]iter_{i} failed: {exc}[/red]")
+                    patience_counter += 1
+                    progress.update(task, advance=1)
+                    if patience_counter >= self.config.search.early_stop_patience:
+                        break
+                    continue
 
                 # Step 5: Store results
                 log_entry = self.search_log.entries[-1]

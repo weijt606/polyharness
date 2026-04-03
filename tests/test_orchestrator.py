@@ -137,3 +137,95 @@ def test_orchestrator_tournament_selection(tmp_path):
     assert isinstance(result, SearchResult)
     assert result.total_iterations >= 5
     assert result.best_score > 0.3
+
+
+def test_orchestrator_resume(tmp_path):
+    """Resume should continue from where a previous run left off."""
+    ws = _setup_workspace(tmp_path)
+    config = ws.load_config()
+    config.search.max_iterations = 3
+    config.search.early_stop_patience = 10
+
+    # First run: 3 iterations
+    orch = Orchestrator(
+        workspace=ws,
+        config=config,
+        proposer=MockProposer(),
+        evaluator=MockEvaluator(),
+    )
+    result1 = orch.run()
+    assert result1.total_iterations == 3
+
+    # Resume run with 5 total iterations (should run 2 more)
+    config2 = ws.load_config()
+    config2.search.max_iterations = 5
+    config2.search.early_stop_patience = 10
+
+    orch2 = Orchestrator(
+        workspace=ws,
+        config=config2,
+        proposer=MockProposer(),
+        evaluator=MockEvaluator(),
+    )
+    result2 = orch2.run(resume=True)
+
+    # Should have completed up to iteration 5
+    assert result2.total_iterations >= 4
+    assert result2.best_score >= result1.best_score
+
+
+def test_orchestrator_resume_already_complete(tmp_path):
+    """Resume when all iterations done should return immediately."""
+    ws = _setup_workspace(tmp_path)
+    config = ws.load_config()
+    config.search.max_iterations = 2
+    config.search.early_stop_patience = 10
+
+    orch = Orchestrator(
+        workspace=ws,
+        config=config,
+        proposer=MockProposer(),
+        evaluator=MockEvaluator(),
+    )
+    orch.run()
+
+    # Resume with same max_iterations
+    orch2 = Orchestrator(
+        workspace=ws,
+        config=config,
+        proposer=MockProposer(),
+        evaluator=MockEvaluator(),
+    )
+    result = orch2.run(resume=True)
+    assert result.best_score > 0
+
+
+def test_orchestrator_error_recovery(tmp_path):
+    """Orchestrator should skip failing iterations and continue."""
+
+    class FailingProposer(BaseProposer):
+        def __init__(self):
+            self.call_count = 0
+
+        def propose(self, workspace_root, candidate_dir, iteration, parent):
+            self.call_count += 1
+            if self.call_count == 1:
+                raise RuntimeError("Simulated proposer failure")
+            # Subsequent calls succeed
+            (candidate_dir / "harness.py").write_text(f"SCORE_HINT = {0.5 + iteration * 0.05}\n")
+            return {"changes_summary": f"iteration {iteration}"}
+
+    ws = _setup_workspace(tmp_path)
+    config = ws.load_config()
+    config.search.max_iterations = 3
+    config.search.early_stop_patience = 10
+
+    orch = Orchestrator(
+        workspace=ws,
+        config=config,
+        proposer=FailingProposer(),
+        evaluator=MockEvaluator(),
+    )
+    # Should not crash — iter_1 fails, iter_2 and iter_3 succeed
+    result = orch.run()
+    assert result.best_score > 0
