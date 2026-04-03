@@ -265,53 +265,73 @@ class Orchestrator:
         self.evaluator = create_evaluator(config.evaluator)
         self.search_log = SearchLog(workspace.log_path)
 
-    def run(self) -> SearchResult:
-        """主搜索循环"""
+    def run(self, resume: bool = False) -> SearchResult:
+        """主搜索循环（支持断点续搜）"""
 
-        # Step 0: 评估初始 harness
-        base_score = self.evaluator.evaluate(
-            self.workspace.base_harness_path,
-            self.workspace.tasks
-        )
-        self.workspace.store_iteration(0, base_score)
-        self.search_log.append(iteration=0, score=base_score)
+        # 如果 resume=True 且日志非空，从上次中断处恢复
+        if resume and len(self.search_log) > 0:
+            entries = self.search_log.entries
+            best_score = self.search_log.best_score
+            best_iteration = self.search_log.best_iteration
+            start_iter = max(e.iteration for e in entries) + 1
+            # 从日志尾部重算 patience_counter
+            patience_counter = recalc_patience(entries, best_score)
+        else:
+            # Step 0: 评估初始 harness
+            base_score = self.evaluator.evaluate(...)
+            best_score = base_score.overall
+            best_iteration = 0
+            patience_counter = 0
+            start_iter = 1
 
-        best_score = base_score.overall
-        patience_counter = 0
+        # Dry-run 模式：max_iterations=0 时只评估 base
+        if self.config.max_iterations == 0:
+            return SearchResult(best_iteration=0, ...)
 
-        for i in range(1, self.config.max_iterations + 1):
-            # Step 1: 选择父候选
-            parent = self.select_parent(i)
+        # Rich 进度条：显示当前轮次、进度、当前最优分数
+        with Progress(SpinnerColumn(), BarColumn(), ...) as progress:
+            for i in range(start_iter, self.config.max_iterations + 1):
 
-            # Step 2: Proposer 生成新候选
-            candidate = self.proposer.propose(
-                workspace=self.workspace,
-                parent=parent,
-                iteration=i
-            )
+                try:
+                    # Step 1: 选择父候选
+                    parent = self.select_parent(i)
 
-            # Step 3: 评估新候选
-            score = self.evaluator.evaluate(
-                candidate.harness_path,
-                self.workspace.tasks
-            )
+                    # Step 2: Proposer 生成新候选
+                    candidate = self.proposer.propose(
+                        workspace=self.workspace,
+                        parent=parent,
+                        iteration=i
+                    )
 
-            # Step 4: 存储结果
-            self.workspace.store_iteration(i, candidate, score)
-            self.search_log.append(iteration=i, parent=parent, score=score)
+                    # Step 3: 评估新候选
+                    score = self.evaluator.evaluate(
+                        candidate.harness_path,
+                        self.workspace.tasks
+                    )
+                except Exception as exc:
+                    # 错误恢复：跳过失败轮次，递增 patience
+                    patience_counter += 1
+                    if patience_counter >= self.config.early_stop_patience:
+                        break
+                    continue
 
-            # Step 5: 更新最佳 & 检查早停
-            if score.overall > best_score:
-                best_score = score.overall
-                patience_counter = 0
-            else:
-                patience_counter += 1
+                # Step 4: 存储结果
+                self.workspace.store_iteration(i, candidate, score)
+                self.search_log.append(iteration=i, parent=parent, score=score)
 
-            if patience_counter >= self.config.early_stop_patience:
-                break
+                # Step 5: 更新最佳 & 检查早停
+                if score.overall > best_score:
+                    best_score = score.overall
+                    best_iteration = i
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+
+                if patience_counter >= self.config.early_stop_patience:
+                    break
 
         return SearchResult(
-            best_iteration=self.search_log.best_iteration,
+            best_iteration=best_iteration,
             best_score=best_score,
             total_iterations=i
         )
@@ -334,6 +354,10 @@ class Orchestrator:
 | 同步 vs 异步循环 | 同步 | 论文是串行的：每轮 1 个候选 |
 | 父候选选择 | 可配置（best/tournament/all）| 论文用 "all"（Proposer 看全部历史自行决定），但 "best" 更省 context |
 | 早停策略 | patience-based | 简单有效，避免浪费 API 预算 |
+| 断点续搜 | `resume` 参数 | 长时间搜索中断后可从上次迭代继续，无需重新开始 |
+| 错误恢复 | try/except + patience | 单轮失败不终止全局搜索，递增 patience 计数器 |
+| 进度显示 | Rich Progress bar | 实时展示当前轮次、进度条、当前最优分数 |
+| Dry-run | `max_iterations=0` | 仅评估 base harness，不启动搜索循环，用于验证配置 |
 
 ### 3.2 Proposer（提案者）
 
@@ -1032,9 +1056,11 @@ poly-harness/
 ├── src/
 │   └── poly_harness/
 │       ├── __init__.py
-│       ├── cli.py                    # CLI 入口 (click/typer)
+│       ├── __main__.py               # python -m poly_harness 入口
+│       ├── cli.py                    # CLI 入口 (click)，16 个命令/子命令
 │       ├── config.py                 # 配置解析 (Pydantic)
-│       ├── orchestrator.py           # 搜索循环编排器
+│       ├── doctor.py                 # ph doctor 后端检测
+│       ├── orchestrator.py           # 搜索循环编排器（进度条 + 断点续搜 + 错误恢复）
 │       ├── workspace.py              # Workspace 文件系统管理
 │       ├── search_log.py             # 搜索日志读写
 │       │
@@ -1043,25 +1069,21 @@ poly-harness/
 │       │   ├── base.py               # Proposer 抽象基类
 │       │   ├── api_proposer.py       # Anthropic API + 工具循环
 │       │   ├── cli_proposer.py       # 统一 CLI Proposer
-│       │   ├── adapters/             # Agent 适配器（参考 Supermemory 模式）
-│       │   │   ├── __init__.py       # 适配器注册表
-│       │   │   ├── base.py           # CLIAdapter 抽象基类
-│       │   │   ├── claude_code.py    # Claude Code 适配器
-│       │   │   ├── claw_code.py      # Claw Code 适配器
-│       │   │   └── opencode.py       # OpenCode 适配器（预留）
-│       │   ├── tools.py              # 工具定义与执行
-│       │   └── sandbox.py            # 命令沙箱化
+│       │   ├── local_proposer.py     # 本地 Proposer（基于规则的变换）
+│       │   └── adapters/             # Agent 适配器（参考 Supermemory 模式）
+│       │       ├── __init__.py       # 适配器注册表
+│       │       ├── base.py           # CLIAdapter 抽象基类
+│       │       ├── claude_code.py    # Claude Code 适配器
+│       │       ├── claw_code.py      # Claw Code 适配器
+│       │       ├── codex.py          # OpenAI Codex 适配器
+│       │       └── opencode.py       # OpenCode 适配器
 │       │
 │       ├── evaluator/
 │       │   ├── __init__.py
-│       │   ├── base.py               # Evaluator 抽象基类
-│       │   ├── python_eval.py        # 本地 Python 评估器
-│       │   └── docker_eval.py        # Docker 沙箱评估器
+│       │   └── evaluator.py          # Python 评估器
 │       │
 │       └── utils/
-│           ├── caching.py            # Prompt caching 工具
-│           ├── diff.py               # Diff 生成工具
-│           └── logging.py            # 日志工具
+│           └── __init__.py
 │
 ├── templates/                        # Workspace 模板
 │   ├── default/
@@ -1076,11 +1098,17 @@ poly-harness/
 │       └── tasks/
 │
 ├── tests/
-│   ├── test_orchestrator.py
-│   ├── test_proposer.py
+│   ├── test_smoke.py                # 冒烟测试（导入 + CLI 入口）
+│   ├── test_cli_features.py         # CLI 命令功能测试（32 个）
+│   ├── test_cli_adapters.py         # Agent 适配器单元测试
+│   ├── test_orchestrator.py         # 编排器测试（含 resume、错误恢复）
 │   ├── test_evaluator.py
 │   ├── test_workspace.py
-│   └── test_sandbox.py
+│   ├── test_config.py               # 配置解析测试
+│   ├── test_search_log.py           # 搜索日志测试
+│   ├── test_compare.py              # compare/diff 测试
+│   ├── test_export.py               # export 测试
+│   └── test_log.py                  # log 命令测试
 │
 └── docs/                             # 已有的研究文档（保留）
     ├── research/
@@ -1089,7 +1117,49 @@ poly-harness/
     └── references/
 ```
 
-## 8. 依赖
+## 8. CLI 命令参考
+
+PolyHarness 提供 16 个命令/子命令，通过 `ph` 入口访问：
+
+### 8.1 全局选项
+
+| 选项 | 说明 |
+|------|------|
+| `-v` / `--verbose` | 显示详细输出 |
+| `-q` / `--quiet` | 静默模式，仅输出结果 |
+| `--help` | 显示帮助信息 |
+
+### 8.2 命令一览
+
+| 命令 | 说明 |
+|------|------|
+| `ph doctor` | 检测可用后端和环境配置 |
+| `ph init` | 初始化 workspace（支持 `--agent`、`--example`、`--backend`） |
+| `ph run` | 启动优化搜索循环 |
+| `ph status` | 显示当前搜索状态（已用时间、改进率、Δ） |
+| `ph log` | 查看迭代历史（支持 tree/flat 模式，显示 Δ 列） |
+| `ph best` | 显示最优候选 |
+| `ph compare A B` | 对比两个候选的分数差异 |
+| `ph diff N` | `compare 0 N` 的快捷方式 |
+| `ph leaderboard` | 排行榜（`--top N`、`--tasks` 任务粒度） |
+| `ph trace N` | 查看候选的 stdout/stderr/metrics/exitcode |
+| `ph report` | 生成 Markdown 报告（含配置表、迭代日志、ASCII sparkline） |
+| `ph apply` | 将最优 harness 应用到 agent |
+| `ph export` | 导出搜索结果 |
+| `ph clean` | 清理 workspace（`--keep-best`、`-y`） |
+| `ph config show` | 显示当前配置 |
+| `ph config set KEY VAL` | 修改配置（dot-notation，Pydantic 校验） |
+
+### 8.3 `ph run` 关键选项
+
+| 选项 | 说明 |
+|------|------|
+| `--dry-run` | 仅评估 base harness，不启动搜索循环 |
+| `--resume` | 从上次中断处继续搜索 |
+| `--backend NAME` | 运行时覆盖 Proposer 后端 |
+| `--strategy NAME` | 运行时覆盖父候选选择策略（best/tournament/all） |
+
+## 9. 依赖
 
 ```toml
 # pyproject.toml
@@ -1120,9 +1190,9 @@ dev = [
 ph = "poly_harness.cli:main"
 ```
 
-## 9. 关键技术决策记录
+## 10. 关键技术决策记录
 
-### 9.1 为什么 MVP 用 API 直连而非 CLI 后端
+### 10.1 为什么 MVP 用 API 直连而非 CLI 后端
 
 | 因素 | API 直连 | Claude Code CLI | Claw Code CLI |
 |------|---------|----------------|---------------|
@@ -1139,15 +1209,15 @@ proposer:
   backend: "api"          # 或 "claude-code" 或 "claw-code"
 ```
 
-### 9.2 为什么不用 LangChain/LangGraph/CrewAI
+### 10.2 为什么不用 LangChain/LangGraph/CrewAI
 
 Meta-Harness 的核心是**文件系统接口**——Proposer 通过 cat/grep/ls 读取信息。这只需要 4 个工具 + 一个 API 循环，不需要复杂的编排框架。引入 LangChain 等框架会增加不必要的抽象层和调试复杂度。
 
-### 9.3 为什么全量保留 trace 而非压缩
+### 10.3 为什么全量保留 trace 而非压缩
 
 信息瓶颈假说（A2 文档验证）的核心结论：压缩 trace 为摘要导致 15+ pp 的性能下降。本实现忠实还原论文设置，保留全部 trace。用户可以在 `config.yaml` 中配置 `trace_retention: full | summary | scores_only` 进行消融实验。
 
-### 9.4 Proposer 工具集的最小化设计
+### 10.4 Proposer 工具集的最小化设计
 
 论文中 Claude Code 有 25+ 工具族，但 Proposer 只需要 4 个：
 

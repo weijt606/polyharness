@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-121%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -129,13 +129,18 @@ The orchestrator: copies your harness → asks the Proposer agent to improve it 
 ### 5. Inspect and apply
 
 ```bash
-ph log                         # search tree visualization
-ph status                      # progress table
+ph status                      # progress table + elapsed + improvement rate
+ph log                         # search tree with delta (Δ) column
 ph best                        # best candidate details
+ph leaderboard                 # ranked table of all candidates (--tasks for drilldown)
 ph compare 0 5                 # diff two iterations (scores + code)
+ph diff 5                      # shorthand for: compare 0 5
+ph trace 3                     # view stdout/stderr/metrics for iter_3
+ph report                      # generate a full markdown report
 
 ph apply                       # write best harness back to base_harness/
 ph export ./my-optimized       # or export to any directory
+ph clean --keep-best           # remove candidates to free disk space
 ```
 
 ### Try it now (no API key needed)
@@ -265,12 +270,26 @@ python -m poly_harness --version
 | `ph doctor` | Detect installed agents and environment status |
 | `ph init` | Initialize workspace with auto-copy of harness, tasks, eval script |
 | `ph run` | Start the optimization search loop |
-| `ph status` | Show progress table (iteration / parent / score / best) |
-| `ph log` | Search tree visualization (or `--flat` for table) |
+| `ph status` | Progress table with elapsed time, improvement rate, and delta |
+| `ph log` | Search tree with delta (Δ) column (or `--flat` for table) |
 | `ph best` | Show best candidate: score, per-task breakdown, changes summary |
 | `ph compare A B` | Compare two iterations: score deltas + unified code diff |
+| `ph diff <N>` | Shorthand for `compare 0 <N>` |
+| `ph leaderboard` | Ranked table of all candidates (`--top N`, `--tasks` drilldown) |
+| `ph trace <N>` | View stdout, stderr, metrics, exit code for an iteration |
+| `ph report` | Generate a full markdown report with score trends and per-task table |
 | `ph apply` | Copy best harness back to `base_harness/` (or `--target` dir) |
 | `ph export <dir>` | Export candidate to any directory (with optional `--include-meta`) |
+| `ph clean` | Remove candidate dirs to free disk space (`--keep-best`, `-y`) |
+| `ph config show` | Display the current workspace configuration |
+| `ph config set K V` | Modify a config value via dot-notation (with validation) |
+
+### Global flags
+
+```
+-v, --verbose        Show detailed output
+-q, --quiet          Suppress non-essential output
+```
 
 ### `ph init` options
 
@@ -280,6 +299,16 @@ python -m poly_harness --version
 --base-harness <dir> Copy starting harness code into workspace
 --task-dir <dir>     Copy tasks/ folder and evaluate.py into workspace
 --eval-script <path> Copy a specific evaluate.py into workspace
+```
+
+### `ph run` options
+
+```
+--max-iterations N   Override max iterations
+--dry-run            Only evaluate the base harness, skip search
+--resume             Continue an interrupted search from where it left off
+--backend <name>     Override proposer backend without editing config
+--strategy <name>    Override parent selection: best | tournament | all
 ```
 
 ---
@@ -346,9 +375,9 @@ ph run --workspace .ws --max-iterations 5
 
 ```
 src/poly_harness/
-├── cli.py                   # Click CLI — 9 commands
+├── cli.py                   # Click CLI — 16 commands/subcommands
 ├── config.py                # Pydantic config models
-├── orchestrator.py          # Meta-Harness search loop + tournament selection
+├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery
 ├── workspace.py             # Filesystem workspace + agent instruction injection
 ├── search_log.py            # JSONL append-only search log
 ├── doctor.py                # Environment detection for all backends
@@ -375,7 +404,7 @@ examples/
 ├── api-calling/             # 20 test cases
 └── rag-qa/                  # 20 QA pairs + 10-doc knowledge base
 
-tests/                       # 86 tests (pytest)
+tests/                       # 121 tests (pytest)
 ```
 
 ## Local Development

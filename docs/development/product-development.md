@@ -215,6 +215,40 @@ PolyHarness 编排器
 | 社区 harness 模板库 | `templates/` 目录 + 贡献指南 | 用户可分享和复用 harness 模板 |
 | 文档站 | mkdocs 或 docusaurus | 完整的用户指南和 API 文档 |
 
+### Phase 3.5：CLI 优化（已完成） ✅
+
+在 Phase 3 完成后，对 CLI 体验进行了三轮系统优化，新增 15 个功能特性，测试从 86 个增长到 121 个。
+
+**低复杂度优化**
+
+| 任务 | 交付物 | 状态 |
+|------|--------|------|
+| 全局 `--verbose`/`--quiet` 标志 | `main()` 全局选项 | ✅ |
+| `ph run --dry-run` | 仅评估 base harness | ✅ |
+| `ph status` 增强 | 已用时间、改进率、Δ | ✅ |
+| `ph log` Δ 列 | tree/flat 模式均显示分数变化 | ✅ |
+| `ph clean` 命令 | `--keep-best`、`-y` 免确认 | ✅ |
+| Rich 进度条 | 编排器搜索循环实时进度 | ✅ |
+
+**中复杂度优化**
+
+| 任务 | 交付物 | 状态 |
+|------|--------|------|
+| `ph run --resume` | 断点续搜 | ✅ |
+| `ph run --backend` | 运行时覆盖 Proposer 后端 | ✅ |
+| `ph config show/set` | dot-notation 配置管理 + Pydantic 校验 | ✅ |
+| `ph diff N` | `compare 0 N` 快捷方式 | ✅ |
+| 编排器错误恢复 | 单轮失败不终止全局搜索 | ✅ |
+
+**高复杂度优化**
+
+| 任务 | 交付物 | 状态 |
+|------|--------|------|
+| `ph leaderboard` | 排行榜（`--top N`、`--tasks` 任务粒度） | ✅ |
+| `ph trace N` | 查看 stdout/stderr/metrics/exitcode | ✅ |
+| `ph report` | Markdown 报告（配置表 + 迭代日志 + ASCII sparkline） | ✅ |
+| `ph run --strategy` | 运行时覆盖父候选选择策略 | ✅ |
+
 ## 5. 成功指标
 
 ### 5.1 技术指标
