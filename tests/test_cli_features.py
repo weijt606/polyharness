@@ -1,9 +1,6 @@
 """Tests for new CLI features: verbose/quiet, dry-run, clean, progress bar."""
 
 import json
-import subprocess
-import sys
-from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -131,7 +128,6 @@ def test_clean_keep_best(runner, workspace):
 
 def test_orchestrator_dry_run(tmp_path):
     """Orchestrator with max_iterations=0 should return after base eval."""
-    from poly_harness.config import PolyHarnessConfig
     from poly_harness.evaluator import BaseEvaluator, EvalResult
     from poly_harness.orchestrator import Orchestrator, SearchResult
     from poly_harness.proposer.base import BaseProposer

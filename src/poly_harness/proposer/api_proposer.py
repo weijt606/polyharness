@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import subprocess
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import anthropic
 
@@ -59,7 +59,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "bash",
-        "description": "Run a read-only shell command (ls, cat, grep, diff, wc, find) in the workspace. Writes are not allowed.",
+        "description": (
+            "Run a read-only shell command (ls, cat, grep, diff, wc, find) "
+            "in the workspace. Writes are not allowed."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -251,7 +254,8 @@ class APIProposer(BaseProposer):
     def _tool_bash(self, workspace_root: Path, command: str) -> str:
         cmd_start = command.strip().split()[0] if command.strip() else ""
         if cmd_start not in ALLOWED_BASH_PREFIXES:
-            return f"Error: command '{cmd_start}' not allowed. Only read-only commands: {', '.join(ALLOWED_BASH_PREFIXES)}"
+            allowed = ', '.join(ALLOWED_BASH_PREFIXES)
+            return f"Error: command '{cmd_start}' not allowed. Only read-only commands: {allowed}"
         try:
             proc = subprocess.run(
                 command,

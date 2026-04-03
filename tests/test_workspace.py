@@ -96,7 +96,7 @@ def test_init_does_not_overwrite_existing():
         custom = root / "CLAUDE.md"
         custom.write_text("# My custom instructions\n")
 
-        ws = Workspace.init(root, agent_backend="claude-code")
+        Workspace.init(root, agent_backend="claude-code")
         assert custom.read_text() == "# My custom instructions\n"
 
 

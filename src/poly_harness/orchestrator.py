@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
@@ -273,5 +272,5 @@ class Orchestrator:
         table.add_row("Total iterations", str(result.total_iterations))
         console.print(table)
         console.print(
-            f"\nRun [bold]ph best[/bold] to see details, or [bold]ph apply[/bold] to apply the result."
+            "\nRun [bold]ph best[/bold] to see details, or [bold]ph apply[/bold] to apply the result."
         )

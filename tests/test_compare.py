@@ -6,7 +6,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from poly_harness.cli import main, _format_delta, _collect_files
+from poly_harness.cli import _collect_files, _format_delta, main
 
 
 def _make_workspace_with_candidates(root: Path) -> Path:

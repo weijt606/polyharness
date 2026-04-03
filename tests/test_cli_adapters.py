@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from poly_harness.proposer.adapters import (
     ADAPTER_REGISTRY,
-    CLIAdapter,
-    CLIResult,
     ClaudeCodeAdapter,
     ClawCodeAdapter,
+    CLIAdapter,
+    CLIResult,
     CodexAdapter,
     OpenCodeAdapter,
     get_adapter,
 )
 from poly_harness.proposer.cli_proposer import CLIProposer, _build_prompt
-
 
 # ---------------------------------------------------------------------------
 # Adapter registry & base

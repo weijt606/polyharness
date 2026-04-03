@@ -53,7 +53,7 @@ def run_doctor() -> None:
         click.echo("Recommended: api (Anthropic API direct)")
     else:
         click.echo("Recommended: local (offline development mode)")
-    click.echo(f"\nUsage: ph init --agent <backend>")
+    click.echo("\nUsage: ph init --agent <backend>")
 
 
 def _status(label: str, detail: str, ok: bool) -> None:

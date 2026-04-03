@@ -1,9 +1,7 @@
 """Tests for the Orchestrator — using a mock Proposer + simple evaluator."""
 
 import json
-import textwrap
 
-from poly_harness.config import PolyHarnessConfig
 from poly_harness.evaluator import BaseEvaluator, EvalResult
 from poly_harness.orchestrator import Orchestrator, SearchResult
 from poly_harness.proposer.base import BaseProposer

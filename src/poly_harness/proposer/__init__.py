@@ -9,23 +9,23 @@ CLI_BACKENDS = set(ADAPTER_REGISTRY)
 
 
 def create_proposer(config) -> BaseProposer:
-	"""Factory: create a proposer from config."""
-	if config.backend == "api":
-		return APIProposer(
-			model=config.model,
-			max_tokens=config.max_tokens,
-			temperature=config.temperature,
-		)
-	if config.backend == "local":
-		return LocalProposer()
-	if config.backend in CLI_BACKENDS:
-		return CLIProposer(
-			backend=config.backend,
-			cli_path=config.cli_path,
-		)
-	raise ValueError(
-		f"Unsupported proposer backend: {config.backend}. "
-		f"Supported backends: api, local, {', '.join(sorted(CLI_BACKENDS))}."
-	)
+    """Factory: create a proposer from config."""
+    if config.backend == "api":
+        return APIProposer(
+            model=config.model,
+            max_tokens=config.max_tokens,
+            temperature=config.temperature,
+        )
+    if config.backend == "local":
+        return LocalProposer()
+    if config.backend in CLI_BACKENDS:
+        return CLIProposer(
+            backend=config.backend,
+            cli_path=config.cli_path,
+        )
+    raise ValueError(
+        f"Unsupported proposer backend: {config.backend}. "
+        f"Supported backends: api, local, {', '.join(sorted(CLI_BACKENDS))}."
+    )
 
 __all__ = ["APIProposer", "CLIProposer", "LocalProposer", "BaseProposer", "create_proposer"]

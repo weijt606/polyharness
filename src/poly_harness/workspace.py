@@ -279,13 +279,13 @@ class Workspace:
         if not src.exists():
             raise RuntimeError(f"Best candidate directory not found: {src}")
 
-        SKIP = {"score.json", "metadata.json", "traces", "__pycache__"}
+        skip_names = {"score.json", "metadata.json", "traces", "__pycache__"}
         target.mkdir(parents=True, exist_ok=True)
 
         copied = 0
         for item in sorted(src.rglob("*")):
             rel = item.relative_to(src)
-            if any(part in SKIP for part in rel.parts):
+            if any(part in skip_names for part in rel.parts):
                 continue
             dest = target / rel
             if item.is_dir():

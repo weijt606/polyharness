@@ -1,6 +1,5 @@
 """Tests for SearchLog."""
 
-import json
 
 from poly_harness.search_log import LogEntry, SearchLog
 

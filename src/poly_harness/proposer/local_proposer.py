@@ -385,7 +385,10 @@ def generate(description: str) -> str:
     if "even" in desc:
         return "return [x for x in args if x % 2 == 0]"
     if "unique" in desc:
-        return "seen = set()\\nresult = []\\nfor x in args:\\n    if x not in seen:\\n        seen.add(x)\\n        result.append(x)\\nreturn result"
+        return (
+            "seen = set()\\nresult = []\\nfor x in args:\\n"
+            "    if x not in seen:\\n        seen.add(x)\\n        result.append(x)\\nreturn result"
+        )
     if "double" in desc:
         return "return [x * 2 for x in args]"
     return "return args"
@@ -434,7 +437,10 @@ def generate(description: str) -> str:
     if "even" in desc:
         return "return [x for x in args if x % 2 == 0]"
     if "unique" in desc:
-        return "seen = set()\\nresult = []\\nfor x in args:\\n    if x not in seen:\\n        seen.add(x)\\n        result.append(x)\\nreturn result"
+        return (
+            "seen = set()\\nresult = []\\nfor x in args:\\n"
+            "    if x not in seen:\\n        seen.add(x)\\n        result.append(x)\\nreturn result"
+        )
     if "double" in desc:
         return "return [x * 2 for x in args]"
     if "capitalize" in desc or "capitaliz" in desc:
@@ -530,7 +536,10 @@ def generate(description: str) -> str:
     if "even" in desc:
         return "return [x for x in args if x % 2 == 0]"
     if "unique" in desc:
-        return "seen = set()\\nresult = []\\nfor x in args:\\n    if x not in seen:\\n        seen.add(x)\\n        result.append(x)\\nreturn result"
+        return (
+            "seen = set()\\nresult = []\\nfor x in args:\\n"
+            "    if x not in seen:\\n        seen.add(x)\\n        result.append(x)\\nreturn result"
+        )
     if "double" in desc:
         return "return [x * 2 for x in args]"
     if "capitalize" in desc or "capitaliz" in desc:
@@ -568,7 +577,8 @@ def route(query: str) -> dict:
 
     if "weather" in q or "temperature" in q:
         return {"endpoint": "get_weather", "params": {"city": "unknown"}}
-    if any(w in q for w in ["product", "buy", "shop", "headphone", "laptop", "shoes", "find me", "show me option", "need a"]):
+    shop_words = ["product", "buy", "shop", "headphone", "laptop", "shoes", "find me", "show me option", "need a"]
+    if any(w in q for w in shop_words):
         return {"endpoint": "search_products", "params": {"query": query, "max_results": 10}}
     if "profile" in q or "user" in q:
         return {"endpoint": "get_user_profile", "params": {"username": "unknown"}}
@@ -630,7 +640,11 @@ def route(query: str) -> dict:
         city = _extract_city(query)
         return {"endpoint": "get_weather", "params": {"city": city}}
 
-    if any(w in q for w in ["product", "buy", "shop", "headphone", "laptop", "shoes", "find me", "show me option", "need a"]):
+    shop_words = [
+        "product", "buy", "shop", "headphone", "laptop",
+        "shoes", "find me", "show me option", "need a",
+    ]
+    if any(w in q for w in shop_words):
         return {"endpoint": "search_products", "params": {"query": query, "max_results": 10}}
 
     if "profile" in q or ("look up" in q and "user" in q):
@@ -696,7 +710,11 @@ def _extract_city(q: str) -> str:
     return match.group(1) if match else "unknown"
 
 def _extract_day(q: str) -> str:
-    match = re.search(r"\\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|today|tomorrow)\\b", q, re.IGNORECASE)
+    days_pat = (
+        r"\\b(Monday|Tuesday|Wednesday|Thursday|Friday"
+        r"|Saturday|Sunday|today|tomorrow)\\b"
+    )
+    match = re.search(days_pat, q, re.IGNORECASE)
     return match.group(0) if match else "unknown"
 
 def _extract_quoted(q: str) -> str:
@@ -704,7 +722,11 @@ def _extract_quoted(q: str) -> str:
     return match.group(1) if match else ""
 
 def _extract_language(q: str) -> str:
-    match = re.search(r"(?:to|in)\\s+(Spanish|French|Japanese|German|Chinese|Korean|Italian|Portuguese|Russian|Arabic)", q, re.IGNORECASE)
+    lang_pat = (
+        r"(?:to|in)\\s+(Spanish|French|Japanese|German|Chinese"
+        r"|Korean|Italian|Portuguese|Russian|Arabic)"
+    )
+    match = re.search(lang_pat, q, re.IGNORECASE)
     return match.group(1) if match else "unknown"
 
 def _extract_subject(q: str) -> str:
@@ -723,7 +745,11 @@ def route(query: str) -> dict:
         city = _extract_city(query)
         return {"endpoint": "get_weather", "params": {"city": city}}
 
-    if any(w in q for w in ["product", "buy", "shop", "headphone", "laptop", "shoes", "find me", "show me option", "need a"]):
+    shop_words = [
+        "product", "buy", "shop", "headphone", "laptop",
+        "shoes", "find me", "show me option", "need a",
+    ]
+    if any(w in q for w in shop_words):
         cleaned = re.sub(r"^(find me|show me|i need|search for)\\s+", "", q).strip()
         return {"endpoint": "search_products", "params": {"query": cleaned, "max_results": 10}}
 

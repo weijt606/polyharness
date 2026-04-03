@@ -110,9 +110,15 @@ def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | No
     default=None,
     help="Override parent selection strategy.",
 )
-def run(workspace: str, max_iterations: int | None, dry_run: bool, resume: bool, backend: str | None, strategy: str | None):
+def run(
+    workspace: str,
+    max_iterations: int | None,
+    dry_run: bool,
+    resume: bool,
+    backend: str | None,
+    strategy: str | None,
+):
     """Start the optimization search loop."""
-    from poly_harness.config import PolyHarnessConfig
     from poly_harness.orchestrator import Orchestrator
     from poly_harness.workspace import Workspace
 
@@ -149,7 +155,6 @@ def status(workspace: str):
     """Show current optimization progress."""
     from datetime import datetime
 
-    from poly_harness.search_log import SearchLog
     from poly_harness.workspace import Workspace
 
     ws = Workspace(workspace)
@@ -349,9 +354,9 @@ def compare(left: str, right: str, workspace: str, no_diff: bool):
     if no_diff:
         return
 
-    SKIP = {"score.json", "metadata.json", "traces", "__pycache__"}
-    left_files = _collect_files(left_dir, SKIP)
-    right_files = _collect_files(right_dir, SKIP)
+    skip_names = {"score.json", "metadata.json", "traces", "__pycache__"}
+    left_files = _collect_files(left_dir, skip_names)
+    right_files = _collect_files(right_dir, skip_names)
     all_files = sorted(set(left_files) | set(right_files))
 
     if not all_files:
@@ -391,7 +396,6 @@ def compare(left: str, right: str, workspace: str, no_diff: bool):
 )
 def best(workspace: str):
     """Show the best candidate so far."""
-    from poly_harness.search_log import SearchLog
     from poly_harness.workspace import Workspace
 
     ws = Workspace(workspace)
@@ -437,7 +441,6 @@ def best(workspace: str):
 @click.option("--flat", is_flag=True, help="Show flat chronological list instead of tree.")
 def log(workspace: str, flat: bool):
     """Show the search history as a tree (or flat list)."""
-    from rich.tree import Tree
 
     from poly_harness.workspace import Workspace
 
@@ -605,12 +608,12 @@ def export_cmd(target: str, workspace: str, iteration: int | None, include_meta:
     target_path = Path(target)
     target_path.mkdir(parents=True, exist_ok=True)
 
-    SKIP_META = {"score.json", "metadata.json", "traces"}
+    skip_meta = {"score.json", "metadata.json", "traces"}
 
     copied = 0
     for item in sorted(src_dir.rglob("*")):
         rel = item.relative_to(src_dir)
-        if not include_meta and any(part in SKIP_META for part in rel.parts):
+        if not include_meta and any(part in skip_meta for part in rel.parts):
             continue
         if item.name == "__pycache__" or "__pycache__" in rel.parts:
             continue
@@ -952,7 +955,6 @@ def trace(iteration: int, workspace: str, task: str | None):
     console.print()
 
     from rich.panel import Panel
-    from rich.syntax import Syntax
 
     for tn in sorted(task_names):
         console.rule(f"[bold cyan]Task: {tn}[/bold cyan]")
@@ -1064,8 +1066,8 @@ def report(workspace: str, output: str | None):
     lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
 
     lines.append("## Configuration\n")
-    lines.append(f"| Parameter | Value |")
-    lines.append(f"|-----------|-------|")
+    lines.append("| Parameter | Value |")
+    lines.append("|-----------|-------|")
     lines.append(f"| Backend | {config.proposer.backend} |")
     lines.append(f"| Model | {config.proposer.model} |")
     lines.append(f"| Max iterations | {config.search.max_iterations} |")
@@ -1075,13 +1077,20 @@ def report(workspace: str, output: str | None):
     lines.append("")
 
     lines.append("## Results Summary\n")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|--------|-------|")
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
     lines.append(f"| Total iterations | {total} |")
     lines.append(f"| Base score | {base_s:.4f} |")
     lines.append(f"| Best score | {best_s:.4f} (iter_{best_i}) |")
-    lines.append(f"| Improvement | +{best_s - base_s:.4f} ({(best_s - base_s) / base_s * 100:.1f}%) |" if base_s > 0 else f"| Improvement | +{best_s - base_s:.4f} |")
-    lines.append(f"| Improvement rate | {improvement_rate:.0%} ({improved_count}/{total - 1}) |" if total > 1 else "| Improvement rate | N/A |")
+    if base_s > 0:
+        delta_pct = (best_s - base_s) / base_s * 100
+        lines.append(f"| Improvement | +{best_s - base_s:.4f} ({delta_pct:.1f}%) |")
+    else:
+        lines.append(f"| Improvement | +{best_s - base_s:.4f} |")
+    if total > 1:
+        lines.append(f"| Improvement rate | {improvement_rate:.0%} ({improved_count}/{total - 1}) |")
+    else:
+        lines.append("| Improvement rate | N/A |")
     lines.append(f"| Elapsed | {elapsed_str} |")
     lines.append("")
 
@@ -1166,7 +1175,7 @@ def _format_delta(left_val: float | None, right_val: float | None) -> str:
         return f"[green]+{diff:.2f}[/green]"
     elif diff < 0:
         return f"[red]{diff:.2f}[/red]"
-    return f"[dim]0.00[/dim]"
+    return "[dim]0.00[/dim]"
 
 
 def _collect_files(directory: Path, skip: set[str]) -> list[str]:

@@ -48,7 +48,8 @@ def test_math_base_harness_solve():
     try:
         import harness as math_harness
         # Product of first two numbers: 2 * 5 = 10 (correct for this case)
-        assert math_harness.solve("A store sells apples for $2 each. If Mary buys 5 apples, how much does she pay?") == 10.0
+        question = "A store sells apples for $2 each. If Mary buys 5 apples, how much does she pay?"
+        assert math_harness.solve(question) == 10.0
         # Returns a float
         assert isinstance(math_harness.solve("What is 42?"), float)
     finally:

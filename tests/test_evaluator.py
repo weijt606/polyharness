@@ -1,9 +1,8 @@
 """Tests for the Evaluator."""
 
-import json
 import textwrap
 
-from poly_harness.evaluator import PythonEvaluator, EvalResult
+from poly_harness.evaluator import EvalResult, PythonEvaluator
 
 
 def test_python_evaluator_json_output(tmp_path):
