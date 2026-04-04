@@ -6,7 +6,7 @@ Claw Code is API-compatible with Claude Code.
 
 from __future__ import annotations
 
-from poly_harness.proposer.adapters.base import CLIAdapter
+from polyharness.proposer.adapters.base import CLIAdapter
 
 
 class ClawCodeAdapter(CLIAdapter):

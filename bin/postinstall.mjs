@@ -10,7 +10,7 @@ import { execSync } from "node:child_process";
 
 function isInstalled() {
   try {
-    execSync('python3 -c "import poly_harness"', { stdio: "ignore" });
+    execSync('python3 -c "import polyharness"', { stdio: "ignore" });
     return true;
   } catch {
     return false;

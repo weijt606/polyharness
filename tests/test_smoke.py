@@ -3,15 +3,15 @@
 import subprocess
 import sys
 
-import poly_harness
+import polyharness
 
 
 def test_version_exists():
-    assert poly_harness.__version__
+    assert polyharness.__version__
 
 
 def test_import_config():
-    from poly_harness.config import PolyHarnessConfig
+    from polyharness.config import PolyHarnessConfig
 
     cfg = PolyHarnessConfig()
     assert cfg.search.max_iterations == 20
@@ -19,7 +19,7 @@ def test_import_config():
 
 
 def test_import_workspace():
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace("/tmp/test-ws")
     assert ws.root.name == "test-ws"
@@ -27,7 +27,7 @@ def test_import_workspace():
 
 def test_cli_help():
     result = subprocess.run(
-        [sys.executable, "-m", "poly_harness", "--help"],
+        [sys.executable, "-m", "polyharness", "--help"],
         capture_output=True,
         text=True,
     )
@@ -37,9 +37,9 @@ def test_cli_help():
 
 def test_cli_version():
     result = subprocess.run(
-        [sys.executable, "-m", "poly_harness", "--version"],
+        [sys.executable, "-m", "polyharness", "--version"],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert poly_harness.__version__ in result.stdout
+    assert polyharness.__version__ in result.stdout

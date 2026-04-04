@@ -6,8 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
-from poly_harness.config import PolyHarnessConfig
-from poly_harness.search_log import SearchLog
+from polyharness.config import PolyHarnessConfig
+from polyharness.search_log import SearchLog
 
 
 class Workspace:

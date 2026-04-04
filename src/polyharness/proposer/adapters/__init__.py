@@ -6,11 +6,11 @@ can look up the right adapter at runtime.
 
 from __future__ import annotations
 
-from poly_harness.proposer.adapters.base import CLIAdapter, CLIResult
-from poly_harness.proposer.adapters.claude_code import ClaudeCodeAdapter
-from poly_harness.proposer.adapters.claw_code import ClawCodeAdapter
-from poly_harness.proposer.adapters.codex import CodexAdapter
-from poly_harness.proposer.adapters.opencode import OpenCodeAdapter
+from polyharness.proposer.adapters.base import CLIAdapter, CLIResult
+from polyharness.proposer.adapters.claude_code import ClaudeCodeAdapter
+from polyharness.proposer.adapters.claw_code import ClawCodeAdapter
+from polyharness.proposer.adapters.codex import CodexAdapter
+from polyharness.proposer.adapters.opencode import OpenCodeAdapter
 
 ADAPTER_REGISTRY: dict[str, type[CLIAdapter]] = {
     "claude-code": ClaudeCodeAdapter,

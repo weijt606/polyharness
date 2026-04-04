@@ -39,7 +39,7 @@ dev = [
 ]
 
 [project.scripts]
-ph = "poly_harness.cli:main"
+ph = "polyharness.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/weijt606/polyharness"

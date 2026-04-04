@@ -1,7 +1,7 @@
 """Tests for SearchLog."""
 
 
-from poly_harness.search_log import LogEntry, SearchLog
+from polyharness.search_log import LogEntry, SearchLog
 
 
 def test_search_log_append(tmp_path):

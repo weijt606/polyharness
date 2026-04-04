@@ -1058,9 +1058,9 @@ polyharness/
 ├── LICENSE
 │
 ├── src/
-│   └── poly_harness/
+│   └── polyharness/
 │       ├── __init__.py
-│       ├── __main__.py               # python -m poly_harness 入口
+│       ├── __main__.py               # python -m polyharness 入口
 │       ├── cli.py                    # CLI 入口 (click)，16 个命令/子命令
 │       ├── config.py                 # 配置解析 (Pydantic)
 │       ├── doctor.py                 # ph doctor 后端检测
@@ -1191,7 +1191,7 @@ dev = [
 ]
 
 [project.scripts]
-ph = "poly_harness.cli:main"
+ph = "polyharness.cli:main"
 ```
 
 ## 10. 关键技术决策记录

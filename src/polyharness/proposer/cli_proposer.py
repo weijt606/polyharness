@@ -10,8 +10,8 @@ import os
 import subprocess
 from pathlib import Path
 
-from poly_harness.proposer.adapters import CLIAdapter, get_adapter
-from poly_harness.proposer.base import BaseProposer
+from polyharness.proposer.adapters import CLIAdapter, get_adapter
+from polyharness.proposer.base import BaseProposer
 
 
 def _build_prompt(

@@ -1,8 +1,8 @@
-from poly_harness.proposer.adapters import ADAPTER_REGISTRY
-from poly_harness.proposer.api_proposer import APIProposer
-from poly_harness.proposer.base import BaseProposer
-from poly_harness.proposer.cli_proposer import CLIProposer
-from poly_harness.proposer.local_proposer import LocalProposer
+from polyharness.proposer.adapters import ADAPTER_REGISTRY
+from polyharness.proposer.api_proposer import APIProposer
+from polyharness.proposer.base import BaseProposer
+from polyharness.proposer.cli_proposer import CLIProposer
+from polyharness.proposer.local_proposer import LocalProposer
 
 # CLI backends are all backends that have an adapter registered.
 CLI_BACKENDS = set(ADAPTER_REGISTRY)

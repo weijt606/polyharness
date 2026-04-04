@@ -8,7 +8,7 @@ from typing import Any
 
 import anthropic
 
-from poly_harness.proposer.base import BaseProposer
+from polyharness.proposer.base import BaseProposer
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {

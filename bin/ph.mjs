@@ -6,7 +6,7 @@
  * This thin wrapper finds and invokes the Python `ph` CLI.
  * Resolution order:
  *   1. `ph` on PATH (pip-installed entry point)
- *   2. `python -m poly_harness` (PYTHONPATH / editable install)
+ *   2. `python -m polyharness` (PYTHONPATH / editable install)
  *   3. Local .venv (auto-detect venv in cwd or parents)
  */
 
@@ -44,14 +44,14 @@ function findVenvPython() {
 // Strategy 1: `ph` on PATH
 if (tryExec("ph", args)) process.exit(0);
 
-// Strategy 2: system python -m poly_harness
+// Strategy 2: system python -m polyharness
 for (const py of ["python3", "python"]) {
-  if (tryExec(py, ["-m", "poly_harness", ...args])) process.exit(0);
+  if (tryExec(py, ["-m", "polyharness", ...args])) process.exit(0);
 }
 
 // Strategy 3: auto-detect .venv
 const venvPy = findVenvPython();
-if (venvPy && tryExec(venvPy, ["-m", "poly_harness", ...args])) {
+if (venvPy && tryExec(venvPy, ["-m", "polyharness", ...args])) {
   process.exit(0);
 }
 

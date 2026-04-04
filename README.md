@@ -265,7 +265,7 @@ npm install -g polyharness   # postinstall auto-installs Python package
 npx polyharness doctor       # or run without global install
 ```
 
-The npm package is a thin Node.js wrapper (`bin/ph.mjs`) that finds and invokes the Python CLI. It checks: `ph` on PATH → `python -m poly_harness` → auto-discovers `.venv` in parent directories.
+The npm package is a thin Node.js wrapper (`bin/ph.mjs`) that finds and invokes the Python CLI. It checks: `ph` on PATH → `python -m polyharness` → auto-discovers `.venv` in parent directories.
 
 ### From source
 
@@ -277,7 +277,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 # or: pip install anthropic click pydantic pyyaml rich && export PYTHONPATH="$PWD/src"
 
-python -m poly_harness --version
+python -m polyharness --version
 ```
 
 ---
@@ -395,7 +395,7 @@ ph run --workspace .ws --max-iterations 5
 ## Project Structure
 
 ```
-src/poly_harness/
+src/polyharness/
 ├── cli.py                   # Click CLI — 16 commands/subcommands
 ├── config.py                # Pydantic config models
 ├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery

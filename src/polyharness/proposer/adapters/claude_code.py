@@ -6,7 +6,7 @@ Requires an active Claude Code subscription.
 
 from __future__ import annotations
 
-from poly_harness.proposer.adapters.base import CLIAdapter
+from polyharness.proposer.adapters.base import CLIAdapter
 
 
 class ClaudeCodeAdapter(CLIAdapter):

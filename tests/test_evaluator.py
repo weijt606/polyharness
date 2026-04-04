@@ -2,7 +2,7 @@
 
 import textwrap
 
-from poly_harness.evaluator import EvalResult, PythonEvaluator
+from polyharness.evaluator import EvalResult, PythonEvaluator
 
 
 def test_python_evaluator_json_output(tmp_path):

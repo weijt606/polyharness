@@ -22,7 +22,7 @@ def run_doctor() -> None:
     click.echo("CLI Agent Backends")
     click.echo("─" * 40)
 
-    from poly_harness.proposer.adapters import ADAPTER_REGISTRY
+    from polyharness.proposer.adapters import ADAPTER_REGISTRY
 
     available = []
     for backend_name, adapter_cls in sorted(ADAPTER_REGISTRY.items()):

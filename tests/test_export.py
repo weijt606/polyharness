@@ -6,7 +6,7 @@ import json
 
 from click.testing import CliRunner
 
-from poly_harness.cli import main
+from polyharness.cli import main
 
 
 def _make_workspace(tmp_path):

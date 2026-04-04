@@ -10,7 +10,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from poly_harness.proposer.base import BaseProposer
+from polyharness.proposer.base import BaseProposer
 
 
 class LocalProposer(BaseProposer):

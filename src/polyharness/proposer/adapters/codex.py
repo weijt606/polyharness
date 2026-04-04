@@ -5,7 +5,7 @@ Invokes OpenAI's `codex` CLI agent in quiet/non-interactive mode.
 
 from __future__ import annotations
 
-from poly_harness.proposer.adapters.base import CLIAdapter
+from polyharness.proposer.adapters.base import CLIAdapter
 
 
 class CodexAdapter(CLIAdapter):

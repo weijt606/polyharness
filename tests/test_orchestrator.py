@@ -2,10 +2,10 @@
 
 import json
 
-from poly_harness.evaluator import BaseEvaluator, EvalResult
-from poly_harness.orchestrator import Orchestrator, SearchResult
-from poly_harness.proposer.base import BaseProposer
-from poly_harness.workspace import Workspace
+from polyharness.evaluator import BaseEvaluator, EvalResult
+from polyharness.orchestrator import Orchestrator, SearchResult
+from polyharness.proposer.base import BaseProposer
+from polyharness.workspace import Workspace
 
 
 class MockProposer(BaseProposer):

@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from poly_harness.workspace import Workspace
+from polyharness.workspace import Workspace
 
 
 def test_workspace_init():

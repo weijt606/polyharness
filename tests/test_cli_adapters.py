@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from poly_harness.proposer.adapters import (
+from polyharness.proposer.adapters import (
     ADAPTER_REGISTRY,
     ClaudeCodeAdapter,
     ClawCodeAdapter,
@@ -17,7 +17,7 @@ from poly_harness.proposer.adapters import (
     OpenCodeAdapter,
     get_adapter,
 )
-from poly_harness.proposer.cli_proposer import CLIProposer, _build_prompt
+from polyharness.proposer.cli_proposer import CLIProposer, _build_prompt
 
 # ---------------------------------------------------------------------------
 # Adapter registry & base
@@ -173,7 +173,7 @@ def test_cli_proposer_success(tmp_path):
         "returncode": 0,
     })()
 
-    with patch("poly_harness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
+    with patch("polyharness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
         proposer = CLIProposer(backend="claude-code")
         result = proposer.propose(ws, cand, 0, None)
 
@@ -188,7 +188,7 @@ def test_cli_proposer_missing_binary(tmp_path):
     cand = ws / "candidates" / "iter_0"
 
     with patch(
-        "poly_harness.proposer.cli_proposer.subprocess.run",
+        "polyharness.proposer.cli_proposer.subprocess.run",
         side_effect=FileNotFoundError(),
     ):
         proposer = CLIProposer(backend="codex")
@@ -204,7 +204,7 @@ def test_cli_proposer_timeout(tmp_path):
     import subprocess as sp
 
     with patch(
-        "poly_harness.proposer.cli_proposer.subprocess.run",
+        "polyharness.proposer.cli_proposer.subprocess.run",
         side_effect=sp.TimeoutExpired(cmd="codex", timeout=600),
     ):
         proposer = CLIProposer(backend="codex", timeout=600)
@@ -223,7 +223,7 @@ def test_cli_proposer_nonzero_exit_with_output(tmp_path):
         "returncode": 1,
     })()
 
-    with patch("poly_harness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
+    with patch("polyharness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
         proposer = CLIProposer(backend="claw-code")
         result = proposer.propose(ws, cand, 0, None)
 
@@ -242,7 +242,7 @@ def test_cli_proposer_nonzero_exit_no_output(tmp_path):
         "returncode": 1,
     })()
 
-    with patch("poly_harness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
+    with patch("polyharness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
         proposer = CLIProposer(backend="opencode")
         with pytest.raises(RuntimeError, match="exited with code 1"):
             proposer.propose(ws, cand, 0, None)
@@ -254,8 +254,8 @@ def test_cli_proposer_nonzero_exit_no_output(tmp_path):
 
 def test_factory_creates_cli_proposers():
     """create_proposer returns CLIProposer for all CLI backends."""
-    from poly_harness.config import ProposerConfig
-    from poly_harness.proposer import create_proposer
+    from polyharness.config import ProposerConfig
+    from polyharness.proposer import create_proposer
 
     for backend in ["claude-code", "claw-code", "codex", "opencode"]:
         config = ProposerConfig(backend=backend)  # type: ignore[arg-type]
@@ -266,7 +266,7 @@ def test_factory_creates_cli_proposers():
 
 def test_config_accepts_new_backends():
     """Config model accepts all 6 backend values."""
-    from poly_harness.config import ProposerConfig
+    from polyharness.config import ProposerConfig
 
     for backend in ["api", "claude-code", "claw-code", "codex", "opencode", "local"]:
         cfg = ProposerConfig(backend=backend)  # type: ignore[arg-type]

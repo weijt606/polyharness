@@ -6,12 +6,12 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from poly_harness.cli import _collect_files, _format_delta, main
+from polyharness.cli import _collect_files, _format_delta, main
 
 
 def _make_workspace_with_candidates(root: Path) -> Path:
     """Create a minimal workspace with two candidates."""
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace.init(root=root, agent_backend="local")
 

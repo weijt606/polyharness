@@ -5,7 +5,7 @@ Invokes the open-source `opencode` CLI agent.
 
 from __future__ import annotations
 
-from poly_harness.proposer.adapters.base import CLIAdapter
+from polyharness.proposer.adapters.base import CLIAdapter
 
 
 class OpenCodeAdapter(CLIAdapter):

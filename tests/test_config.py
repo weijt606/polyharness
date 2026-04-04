@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from poly_harness.config import PolyHarnessConfig
+from polyharness.config import PolyHarnessConfig
 
 
 def test_default_config():

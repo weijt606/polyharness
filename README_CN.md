@@ -265,7 +265,7 @@ npm install -g polyharness   # postinstall 自动安装 Python 包
 npx polyharness doctor       # 或无需全局安装直接运行
 ```
 
-npm 包是一个轻量 Node.js 包装器（`bin/ph.mjs`），它会查找并调用 Python CLI。检查顺序是：PATH 上的 `ph` → `python -m poly_harness` → 自动发现父目录中的 `.venv`。
+npm 包是一个轻量 Node.js 包装器（`bin/ph.mjs`），它会查找并调用 Python CLI。检查顺序是：PATH 上的 `ph` → `python -m polyharness` → 自动发现父目录中的 `.venv`。
 
 ### 从源码安装
 
@@ -277,7 +277,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 # 或: pip install anthropic click pydantic pyyaml rich && export PYTHONPATH="$PWD/src"
 
-python -m poly_harness --version
+python -m polyharness --version
 ```
 
 ---
@@ -395,7 +395,7 @@ ph run --workspace .ws --max-iterations 5
 ## 项目结构
 
 ```
-src/poly_harness/
+src/polyharness/
 ├── cli.py                   # Click CLI —— 16 个命令/子命令
 ├── config.py                # Pydantic 配置模型
 ├── orchestrator.py          # Meta-Harness 搜索循环 + 进度条 + 错误恢复

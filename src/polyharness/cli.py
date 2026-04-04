@@ -9,7 +9,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from poly_harness import __version__
+from polyharness import __version__
 
 console = Console()
 
@@ -30,7 +30,7 @@ def main(ctx: click.Context, verbose: bool, quiet: bool):
 @main.command()
 def doctor():
     """Detect installed agents and environment status."""
-    from poly_harness.doctor import run_doctor
+    from polyharness.doctor import run_doctor
 
     run_doctor()
 
@@ -68,7 +68,7 @@ def doctor():
 )
 def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | None, base_harness: str | None):
     """Initialize an optimization workspace for the given agent."""
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace.init(
         root=workspace,
@@ -119,8 +119,8 @@ def run(
     strategy: str | None,
 ):
     """Start the optimization search loop."""
-    from poly_harness.orchestrator import Orchestrator
-    from poly_harness.workspace import Workspace
+    from polyharness.orchestrator import Orchestrator
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -155,7 +155,7 @@ def status(workspace: str):
     """Show current optimization progress."""
     from datetime import datetime
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -235,7 +235,7 @@ def apply(workspace: str, target: str | None):
     Copies the best candidate's code files into the target directory,
     replacing the existing harness. This closes the optimization loop.
     """
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -271,7 +271,7 @@ def compare(left: str, right: str, workspace: str, no_diff: bool):
     """Compare two iteration candidates (scores + code diff)."""
     import difflib
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -396,7 +396,7 @@ def compare(left: str, right: str, workspace: str, no_diff: bool):
 )
 def best(workspace: str):
     """Show the best candidate so far."""
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -442,7 +442,7 @@ def best(workspace: str):
 def log(workspace: str, flat: bool):
     """Show the search history as a tree (or flat list)."""
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -583,7 +583,7 @@ def export_cmd(target: str, workspace: str, iteration: int | None, include_meta:
     """
     import shutil
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -645,7 +645,7 @@ def clean(workspace: str, keep_best: bool, yes: bool):
     """Remove candidate directories and search log to free disk space."""
     import shutil
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -712,7 +712,7 @@ def config_show(workspace: str):
     """Display the current workspace configuration."""
     import yaml
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -745,7 +745,7 @@ def config_set(key: str, value: str, workspace: str):
     """
     import yaml
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -782,7 +782,7 @@ def config_set(key: str, value: str, workspace: str):
     target[final_key] = converted
 
     # Validate by loading the full config
-    from poly_harness.config import PolyHarnessConfig
+    from polyharness.config import PolyHarnessConfig
     try:
         PolyHarnessConfig.model_validate(data)
     except Exception as exc:
@@ -832,7 +832,7 @@ def diff(iteration: int, workspace: str, no_diff: bool):
 @click.option("--tasks", is_flag=True, help="Show per-task score breakdown.")
 def leaderboard(workspace: str, top: int | None, tasks: bool):
     """Display a ranked leaderboard of all candidates."""
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -913,7 +913,7 @@ def leaderboard(workspace: str, top: int | None, tasks: bool):
 @click.option("--task", type=str, default=None, help="Show traces for a specific task only.")
 def trace(iteration: int, workspace: str, task: str | None):
     """View execution traces (stdout, stderr, metrics) for ITERATION."""
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
@@ -1026,7 +1026,7 @@ def report(workspace: str, output: str | None):
     """Generate a markdown report summarizing the optimization run."""
     from datetime import datetime
 
-    from poly_harness.workspace import Workspace
+    from polyharness.workspace import Workspace
 
     ws = Workspace(workspace)
     if not ws.is_initialized():

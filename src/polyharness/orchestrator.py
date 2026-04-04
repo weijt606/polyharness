@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.table import Table
 
-from poly_harness.config import PolyHarnessConfig
-from poly_harness.evaluator import BaseEvaluator, create_evaluator
-from poly_harness.proposer import BaseProposer, create_proposer
-from poly_harness.search_log import SearchLog
-from poly_harness.workspace import Workspace
+from polyharness.config import PolyHarnessConfig
+from polyharness.evaluator import BaseEvaluator, create_evaluator
+from polyharness.proposer import BaseProposer, create_proposer
+from polyharness.search_log import SearchLog
+from polyharness.workspace import Workspace
 
 console = Console()
 

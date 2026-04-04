@@ -1,4 +1,4 @@
-from poly_harness.evaluator.evaluator import (
+from polyharness.evaluator.evaluator import (
     BaseEvaluator,
     EvalResult,
     PythonEvaluator,

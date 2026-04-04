@@ -5,8 +5,8 @@ import json
 import pytest
 from click.testing import CliRunner
 
-from poly_harness.cli import main
-from poly_harness.workspace import Workspace
+from polyharness.cli import main
+from polyharness.workspace import Workspace
 
 
 @pytest.fixture
@@ -108,7 +108,7 @@ def test_clean_keep_best(runner, workspace):
         (d / "score.json").write_text(json.dumps({"overall_score": 0.3 + i * 0.1}))
 
     # Write search log entries so best_iteration can be determined
-    from poly_harness.search_log import SearchLog
+    from polyharness.search_log import SearchLog
     log = SearchLog(workspace.search_log_path)
     log.append(iteration=0, parent=None, score=0.3, task_scores={})
     log.append(iteration=1, parent=0, score=0.5, task_scores={})
@@ -128,9 +128,9 @@ def test_clean_keep_best(runner, workspace):
 
 def test_orchestrator_dry_run(tmp_path):
     """Orchestrator with max_iterations=0 should return after base eval."""
-    from poly_harness.evaluator import BaseEvaluator, EvalResult
-    from poly_harness.orchestrator import Orchestrator, SearchResult
-    from poly_harness.proposer.base import BaseProposer
+    from polyharness.evaluator import BaseEvaluator, EvalResult
+    from polyharness.orchestrator import Orchestrator, SearchResult
+    from polyharness.proposer.base import BaseProposer
 
     class NeverCalled(BaseProposer):
         def propose(self, workspace_root, candidate_dir, iteration, parent):
@@ -188,7 +188,7 @@ def test_status_shows_elapsed(runner, workspace):
 
 def test_log_shows_delta(runner, workspace):
     """ph log should display delta column."""
-    from poly_harness.search_log import SearchLog
+    from polyharness.search_log import SearchLog
 
     log = SearchLog(workspace.search_log_path)
     log.append(iteration=0, parent=None, score=0.3, task_scores={})
@@ -279,7 +279,7 @@ def test_diff_shows_comparison(runner, workspace):
         }))
         (d / "harness.py").write_text(f"# iteration {i}\n")
 
-    from poly_harness.search_log import SearchLog
+    from polyharness.search_log import SearchLog
     log = SearchLog(workspace.search_log_path)
     log.append(iteration=0, parent=None, score=0.3, task_scores={"t1": 0.3})
     log.append(iteration=1, parent=0, score=0.5, task_scores={"t1": 0.5})
@@ -310,7 +310,7 @@ def test_leaderboard_help(runner):
 
 
 def test_leaderboard_basic(runner, workspace):
-    from poly_harness.search_log import SearchLog
+    from polyharness.search_log import SearchLog
     log = SearchLog(workspace.search_log_path)
     log.append(iteration=0, parent=None, score=0.3, task_scores={"t1": 0.3})
     log.append(iteration=1, parent=0, score=0.7, task_scores={"t1": 0.7})
@@ -323,7 +323,7 @@ def test_leaderboard_basic(runner, workspace):
 
 
 def test_leaderboard_top_n(runner, workspace):
-    from poly_harness.search_log import SearchLog
+    from polyharness.search_log import SearchLog
     log = SearchLog(workspace.search_log_path)
     log.append(iteration=0, parent=None, score=0.3, task_scores={})
     log.append(iteration=1, parent=0, score=0.7, task_scores={})
@@ -336,7 +336,7 @@ def test_leaderboard_top_n(runner, workspace):
 
 
 def test_leaderboard_with_tasks(runner, workspace):
-    from poly_harness.search_log import SearchLog
+    from polyharness.search_log import SearchLog
     log = SearchLog(workspace.search_log_path)
     log.append(iteration=0, parent=None, score=0.3, task_scores={"task_a": 0.2, "task_b": 0.4})
     log.append(iteration=1, parent=0, score=0.7, task_scores={"task_a": 0.8, "task_b": 0.6})
@@ -439,7 +439,7 @@ def test_report_generates_markdown(runner, workspace):
 
 
 def test_report_custom_output(runner, workspace, tmp_path):
-    from poly_harness.search_log import SearchLog
+    from polyharness.search_log import SearchLog
     log = SearchLog(workspace.search_log_path)
     log.append(iteration=0, parent=None, score=0.3, task_scores={})
     log.append(iteration=1, parent=0, score=0.5, task_scores={})
