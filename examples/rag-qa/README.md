@@ -19,7 +19,7 @@ Given a question and 10 knowledge-base documents, the harness must:
 
 The naive `harness.py` uses simple word-overlap counting for retrieval and returns the first sentence of the matched document as the answer.
 
-**Base score: ~0.30** (retrieves some docs correctly but answer extraction is too crude)
+**Base score: ~0.51** (retrieval is often correct enough to earn partial credit, but answer extraction remains crude)
 
 ## Run
 

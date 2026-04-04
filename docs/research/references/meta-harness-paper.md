@@ -63,6 +63,9 @@ A **model harness** is the scaffolding code that wraps an LLM: system prompts, t
 - Single retrieval harness transfers across unseen models
 
 ### Agentic Coding — TerminalBench-2 (89 tasks)
+
+The figures below are reported by the Meta-Harness paper and are included here as research references. They are not benchmark results produced by this PolyHarness repository.
+
 - **Claude Opus 4.6**: 76.4% pass rate (#2 overall)
 - **Claude Haiku 4.5**: 37.6% pass rate (#1 among all Haiku agents)
 - Built on top of Terminus-KIRA (KRAFTON AI)

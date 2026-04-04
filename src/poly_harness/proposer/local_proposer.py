@@ -90,11 +90,11 @@ class LocalProposer(BaseProposer):
 
     def _improve_math_solver(self, text: str) -> tuple[str, str]:
         """Return (updated_code, summary) for math word-problem harness."""
-        if "# poly-harness-level: 3" in text:
+        if "# polyharness-level: 3" in text:
             return text, "Already at max optimisation level."
-        if "# poly-harness-level: 2" in text:
+        if "# polyharness-level: 2" in text:
             return _MATH_LEVEL_3, "Level 3: multi-item sums, rates, sequences."
-        if "# poly-harness-level: 1" in text:
+        if "# polyharness-level: 1" in text:
             return _MATH_LEVEL_2, "Level 2: averages, percentages, unit conversion."
         return _MATH_LEVEL_1, "Level 1: keyword-based operation detection."
 
@@ -104,11 +104,11 @@ class LocalProposer(BaseProposer):
 
     def _improve_code_generator(self, text: str) -> tuple[str, str]:
         """Return (updated_code, summary) for code-generation harness."""
-        if "# poly-harness-level: 3" in text:
+        if "# polyharness-level: 3" in text:
             return text, "Already at max optimisation level."
-        if "# poly-harness-level: 2" in text:
+        if "# polyharness-level: 2" in text:
             return _CODEGEN_LEVEL_3, "Level 3: flatten, cumsum, counter, rotate, intersect, palindrome, fibonacci."
-        if "# poly-harness-level: 1" in text:
+        if "# polyharness-level: 1" in text:
             return _CODEGEN_LEVEL_2, "Level 2: second-largest, is-sorted, capitalize, palindrome."
         return _CODEGEN_LEVEL_1, "Level 1: added min, product, filter-even, unique, double keywords."
 
@@ -118,11 +118,11 @@ class LocalProposer(BaseProposer):
 
     def _improve_api_router(self, text: str) -> tuple[str, str]:
         """Return (updated_code, summary) for api-calling harness."""
-        if "# poly-harness-level: 3" in text:
+        if "# polyharness-level: 3" in text:
             return text, "Already at max optimisation level."
-        if "# poly-harness-level: 2" in text:
+        if "# polyharness-level: 2" in text:
             return _API_LEVEL_3, "Level 3: full parameter extraction with regex."
-        if "# poly-harness-level: 1" in text:
+        if "# polyharness-level: 1" in text:
             return _API_LEVEL_2, "Level 2: added parameter extraction helpers."
         return _API_LEVEL_1, "Level 1: improved endpoint routing with more keywords."
 
@@ -132,11 +132,11 @@ class LocalProposer(BaseProposer):
 
     def _improve_rag(self, text: str) -> tuple[str, str]:
         """Return (updated_code, summary) for rag-qa harness."""
-        if "# poly-harness-level: 3" in text:
+        if "# polyharness-level: 3" in text:
             return text, "Already at max optimisation level."
-        if "# poly-harness-level: 2" in text:
+        if "# polyharness-level: 2" in text:
             return _RAG_LEVEL_3, "Level 3: question-type answer extraction with sentence scoring."
-        if "# poly-harness-level: 1" in text:
+        if "# polyharness-level: 1" in text:
             return _RAG_LEVEL_2, "Level 2: TF-IDF-like retrieval with bigrams."
         return _RAG_LEVEL_1, "Level 1: improved retrieval with stopword removal."
 
@@ -152,7 +152,7 @@ _MATH_LEVEL_1 = textwrap.dedent('''\
 
 
     def solve(question: str) -> float:
-        # poly-harness-level: 1
+        # polyharness-level: 1
         """Solve a math word problem. Returns a numeric answer."""
         numbers = [float(n) for n in re.findall(r"-?\\d+\\.?\\d*", question)]
         if not numbers:
@@ -198,7 +198,7 @@ _MATH_LEVEL_2 = textwrap.dedent('''\
 
 
     def solve(question: str) -> float:
-        # poly-harness-level: 2
+        # polyharness-level: 2
         """Solve a math word problem. Returns a numeric answer."""
         numbers = [float(n) for n in re.findall(r"-?\\d+\\.?\\d*", question)]
         if not numbers:
@@ -268,7 +268,7 @@ _MATH_LEVEL_3 = textwrap.dedent('''\
 
 
     def solve(question: str) -> float:
-        # poly-harness-level: 3
+        # polyharness-level: 3
         """Solve a math word problem. Returns a numeric answer."""
         numbers = [float(n) for n in re.findall(r"-?\\d+\\.?\\d*", question)]
         if not numbers:
@@ -365,7 +365,7 @@ import json
 
 
 def generate(description: str) -> str:
-    # poly-harness-level: 1
+    # polyharness-level: 1
     desc = description.lower()
 
     if "sum" in desc and "cumul" not in desc:
@@ -413,7 +413,7 @@ import json
 
 
 def generate(description: str) -> str:
-    # poly-harness-level: 2
+    # polyharness-level: 2
     desc = description.lower()
 
     if "sum" in desc and "cumul" not in desc:
@@ -469,7 +469,7 @@ import json
 
 
 def generate(description: str) -> str:
-    # poly-harness-level: 3
+    # polyharness-level: 3
     desc = description.lower()
 
     if "fibonacci" in desc:
@@ -572,7 +572,7 @@ import json
 
 
 def route(query: str) -> dict:
-    # poly-harness-level: 1
+    # polyharness-level: 1
     q = query.lower()
 
     if "weather" in q or "temperature" in q:
@@ -633,7 +633,7 @@ def _extract_city(q: str) -> str:
 
 
 def route(query: str) -> dict:
-    # poly-harness-level: 2
+    # polyharness-level: 2
     q = query.lower()
 
     if "weather" in q or "temperature" in q:
@@ -738,7 +738,7 @@ def _extract_subject(q: str) -> str:
 
 
 def route(query: str) -> dict:
-    # poly-harness-level: 3
+    # polyharness-level: 3
     q = query.lower()
 
     if "weather" in q or "temperature" in q:
@@ -832,7 +832,7 @@ def _tokenize(text: str) -> set[str]:
 
 
 def retrieve_and_answer(question: str) -> dict:
-    # poly-harness-level: 1
+    # polyharness-level: 1
     if not _KNOWLEDGE_BASE:
         return {"answer": "", "source_id": ""}
 
@@ -910,7 +910,7 @@ def _bigrams(tokens: list[str]) -> set[str]:
 
 
 def retrieve_and_answer(question: str) -> dict:
-    # poly-harness-level: 2
+    # polyharness-level: 2
     if not _KNOWLEDGE_BASE:
         return {"answer": "", "source_id": ""}
 
@@ -1021,7 +1021,7 @@ def _detect_question_type(question: str) -> str:
 
 
 def retrieve_and_answer(question: str) -> dict:
-    # poly-harness-level: 3
+    # polyharness-level: 3
     if not _KNOWLEDGE_BASE:
         return {"answer": "", "source_id": ""}
 

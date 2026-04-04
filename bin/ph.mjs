@@ -56,6 +56,6 @@ if (venvPy && tryExec(venvPy, ["-m", "poly_harness", ...args])) {
 }
 
 console.error(
-  `Error: Could not find PolyHarness.\n\nInstall the Python package:\n  pip install poly-harness\n\nOr install from source:\n  git clone https://github.com/weijt606/poly-harness && cd poly-harness\n  pip install -e .`
+  `Error: Could not find PolyHarness.\n\nInstall the Python package:\n  pip install polyharness\n\nOr install from source:\n  git clone https://github.com/weijt606/polyharness.git && cd polyharness\n  pip install -e .`
 );
 process.exit(1);

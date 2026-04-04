@@ -13,25 +13,25 @@ version: "0.1.0"
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                      PolyHarness 系统                       │
+│                       PolyHarness 系统                        │
 │                                                              │
-│  ┌────────────┐  ┌──────────────┐  ┌───────────────────┐    │
-│  │ CLI / API  │→ │  Orchestrator │→ │  Workspace (FS)   │    │
-│  └────────────┘  │  (编排器)     │  │                   │    │
-│                  │              │  │  candidates/       │    │
-│                  │  for i in N: │  │  ├── iter_0/       │    │
-│                  │   propose()  │←→│  ├── iter_1/       │    │
-│                  │   evaluate() │  │  └── ...           │    │
-│                  │   store()    │  │                   │    │
-│                  │   apply()    │  │  base_harness/     │    │
-│                  └──────┬───────┘  │  config.yaml        │    │
-│                         │         │  search_log.jsonl   │    │
-│                    ┌────┴────┐    └───────────────────┘    │
-│                    │         │                              │
-│              ┌─────┴──┐ ┌───┴──────┐                      │
-│              │Proposer│ │Evaluator │                      │
-│              │(Agent) │ │(Sandbox) │                      │
-│              └────────┘ └──────────┘                      │
+│  ┌────────────┐  ┌──────────────┐  ┌───────────────────┐     │
+│  │ CLI / API  │→ │  Orchestrator│→ │  Workspace (FS)   │     │
+│  └────────────┘  │  (编排器)     │  │                   │     │
+│                  │              │  │  candidates/      │     │
+│                  │  for i in N: │  │  ├── iter_0/      │     │
+│                  │   propose()  │←→│  ├── iter_1/      │     │
+│                  │   evaluate() │  │  └── ...          │     │
+│                  │   store()    │  │                   │     │
+│                  │   apply()    │  │  base_harness/    │     │
+│                  └──────┬───────┘  │  config.yaml      │     │
+│                         │          │  search_log.jsonl │     │
+│                    ┌────┴────┐     └───────────────────┘     │
+│                    │         │                               │
+│              ┌─────┴──┐ ┌───┴──────┐                         │
+│              │Proposer│ │Evaluator │                         │
+│              │(Agent) │ │(Sandbox) │                         │
+│              └────────┘ └──────────┘                         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -41,32 +41,32 @@ version: "0.1.0"
 每一轮迭代 (iteration i):
 ═══════════════════════════
 
-  ┌─────────────────────────────────────────────────────────┐
-  │ Step 1: Propose                                         │
-  │                                                         │
-  │  Proposer Agent 启动                                    │
-  │    → 读取 workspace/ 中所有历史候选、分数、trace          │
-  │    → 分析失败模式，识别改进方向                            │
-  │    → 在 candidates/iter_{i}/ 写入新 harness 代码          │
-  └───────────────────────┬─────────────────────────────────┘
-                          │
-  ┌───────────────────────▼─────────────────────────────────┐
-  │ Step 2: Evaluate                                        │
-  │                                                         │
-  │  Evaluator 启动（Docker 沙箱或本地进程）                  │
-  │    → 加载 candidates/iter_{i}/harness 代码               │
-  │    → 在任务集上运行评估                                   │
-  │    → 收集 stdout/stderr/exitcode/metrics                │
-  └───────────────────────┬─────────────────────────────────┘
-                          │
-  ┌───────────────────────▼─────────────────────────────────┐
-  │ Step 3: Store                                           │
-  │                                                         │
-  │  编排器写入结果                                           │
-  │    → candidates/iter_{i}/score.json                     │
-  │    → candidates/iter_{i}/traces/                        │
-  │    → search_log.jsonl (追加当轮摘要)                     │
-  └─────────────────────────────────────────────────────────┘
+    ┌─────────────────────────────────────────────────────────┐
+    │ Step 1: Propose                                         │
+    │                                                         │
+    │  Proposer Agent 启动                                     │
+    │    → 读取 workspace/ 中所有历史候选、分数、trace            │
+    │    → 分析失败模式，识别改进方向                             │
+    │    → 在 candidates/iter_{i}/ 写入新 harness 代码          │
+    └───────────────────────┬─────────────────────────────────┘
+                                                    │
+    ┌───────────────────────▼─────────────────────────────────┐
+    │ Step 2: Evaluate                                        │
+    │                                                         │
+    │  Evaluator 启动（Docker 沙箱或本地进程）                    │
+    │    → 加载 candidates/iter_{i}/harness 代码                │
+    │    → 在任务集上运行评估                                    │
+    │    → 收集 stdout/stderr/exitcode/metrics                 │
+    └───────────────────────┬─────────────────────────────────┘
+                                                    │
+    ┌───────────────────────▼─────────────────────────────────┐
+    │ Step 3: Store                                           │
+    │                                                         │
+    │  编排器写入结果                                           │
+    │    → candidates/iter_{i}/score.json                     │
+    │    → candidates/iter_{i}/traces/                        │
+    │    → search_log.jsonl (追加当轮摘要)                      │
+    └─────────────────────────────────────────────────────────┘
 ```
 
 ### 1.3 与论文实现的映射
@@ -85,7 +85,7 @@ version: "0.1.0"
 为满足产品化、可持续和可复现目标，技术架构必须满足以下约束：
 
 1. **产品可交付约束**
-    - 首发形态必须是本地可安装 CLI（`pip install poly-harness` + `ph run`）。
+    - 首发形态必须是本地可安装 CLI（`pip install polyharness` + `ph run`）。
     - 核心路径不依赖复杂基础设施，默认本地运行，容器/云作为可选能力。
 
 2. **可持续演进约束**
@@ -194,6 +194,8 @@ harness:
 
 **`score.json`**
 
+以下 JSON 仅为结构示例，用于说明字段格式；其中数值不是本仓库某次公开实验的跑分结果。
+
 ```json
 {
   "iteration": 3,
@@ -229,6 +231,8 @@ harness:
 
 **`search_log.jsonl`**（每行一条）
 
+以下内容是日志格式示例，不对应某次公开 benchmark 或 README 示例运行。
+
 ```json
 {"iteration": 0, "parent": null, "score": 0.45, "best_so_far": 0.45, "timestamp": "..."}
 {"iteration": 1, "parent": "iter_0", "score": 0.52, "best_so_far": 0.52, "timestamp": "..."}
@@ -243,7 +247,7 @@ harness:
 | **一切皆文件** | Proposer 通过文件系统工具（cat/grep/ls）访问全部信息 | 论文核心设计 |
 | **全量保留** | 不删除、不压缩历史候选——信息瓶颈假说的核心验证 | 论文 Table 3 消融 |
 | **人类可读** | 所有文件使用文本格式（JSON/YAML/TXT/Patch），便于调试 | 工程实践 |
-| **diff 优于 snapshot** | 存储候选间的 diff 帮助 Proposer 快速理解变化 | 论文 Appendix A: 41% 源码读取 |
+| **diff 更利于理解变化** | 存储候选间的 diff 帮助 Proposer 快速理解变化方向 | 论文 Appendix A: 41% 源码读取 |
 | **trace 与代码并存** | 每个候选的执行轨迹和代码在同一目录下 | 论文: 40% trace 读取 |
 
 ## 3. 核心组件设计
@@ -1025,16 +1029,16 @@ Meta-Harness 论文使用 **"all"** 策略——Proposer 可以访问所有历�
 ```
 Proposer 的每次 API 调用：
 ┌─────────────────────────────────────────────────┐
-│ System Prompt (CLAW.md 内容)    ←── 缓存（不变）  │
-│ + Workspace 概览                ←── 缓存（慢变）  │
-│ + 当前任务上下文               ←── 不缓存（每轮变） │
+│ System Prompt (CLAW.md 内容)    ←── 缓存（不变） │
+│ + Workspace 概览                ←── 缓存（慢变） │
+│ + 当前任务上下文                ←── 不缓存（每轮变）│
 └─────────────────────────────────────────────────┘
 
 Agent 工具循环中的多轮对话：
 ┌─────────────────────────────────────────────────┐
-│ 前 N-3 条消息                    ←── 缓存         │
-│ 最近 3 条消息                    ←── ephemeral    │
-│ 当前工具调用结果                  ←── 不缓存       │
+│ 前 N-3 条消息                    ←── 缓存        │
+│ 最近 3 条消息                    ←── ephemeral   │
+│ 当前工具调用结果                 ←── 不缓存      │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -1048,7 +1052,7 @@ Agent 工具循环中的多轮对话：
 ## 7. 项目代码结构
 
 ```
-poly-harness/
+polyharness/
 ├── pyproject.toml                    # 项目配置 + 依赖
 ├── README.md
 ├── LICENSE
@@ -1165,7 +1169,7 @@ PolyHarness 提供 16 个命令/子命令，通过 `ph` 入口访问：
 # pyproject.toml
 
 [project]
-name = "poly-harness"
+name = "polyharness"
 version = "0.1.0"
 requires-python = ">=3.11"
 
@@ -1215,7 +1219,7 @@ Meta-Harness 的核心是**文件系统接口**——Proposer 通过 cat/grep/ls
 
 ### 10.3 为什么全量保留 trace 而非压缩
 
-信息瓶颈假说（A2 文档验证）的核心结论：压缩 trace 为摘要导致 15+ pp 的性能下降。本实现忠实还原论文设置，保留全部 trace。用户可以在 `config.yaml` 中配置 `trace_retention: full | summary | scores_only` 进行消融实验。
+按 Meta-Harness 论文报告的消融结果，压缩 trace 为摘要会带来 15+ pp 的性能下降。本实现默认保留全部 trace，并提供 `trace_retention: full | summary | scores_only` 作为实验配置；这里不宣称本仓库已在该文档中复现出同一具体数值。
 
 ### 10.4 Proposer 工具集的最小化设计
 

@@ -15,6 +15,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Rich progress bar during search loop
 - Error recovery: failed iterations skip gracefully
 - 5 examples: text-classification, math-word-problems, code-generation, api-calling, rag-qa
-- npm wrapper (`bin/ph.mjs`) for `npx poly-harness` usage
+- npm wrapper (`bin/ph.mjs`) for `npx polyharness` usage
 - GitHub Actions CI (lint + test on Python 3.12/3.13)
 - 121 tests passing

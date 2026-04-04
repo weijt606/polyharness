@@ -5,8 +5,8 @@ Thanks for your interest in contributing! Here's how to get started.
 ## Development Setup
 
 ```bash
-git clone https://github.com/weijt606/poly-harness.git
-cd poly-harness
+git clone https://github.com/weijt606/polyharness.git
+cd polyharness
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -40,7 +40,7 @@ ruff check src/ tests/
 
 ## Reporting Issues
 
-Use [GitHub Issues](https://github.com/weijt606/poly-harness/issues). Include:
+Use [GitHub Issues](https://github.com/weijt606/polyharness/issues). Include:
 - Steps to reproduce
 - Expected vs actual behavior
 - Python version and OS

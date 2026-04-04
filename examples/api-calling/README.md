@@ -17,7 +17,7 @@ Given a query like "What's the weather in Tokyo?", select the right API endpoint
 
 The naive `harness.py` matches a few keywords (`weather`, `product`, `email`, `stock`) to endpoints but doesn't extract parameters properly. Falls back to `get_weather` for unrecognized queries.
 
-**Base score: ~0.30** (gets some endpoints right but parameters are mostly wrong)
+**Base score: ~0.19** (gets some endpoints right but parameters are often missing or incorrect)
 
 ## Run
 

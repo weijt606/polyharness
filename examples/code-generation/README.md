@@ -12,7 +12,7 @@ Given a description like "Return the sum of all numbers in the list", generate t
 
 The naive `harness.py` pattern-matches a few keywords (`sum`, `max`, `reverse`, `sort`, `len`) and emits one-liner boilerplate. Falls back to `return args` for anything it doesn't recognize.
 
-**Base score: ~0.40** (handles ~8 of 20 tasks correctly)
+**Base score: ~0.27** (16/60 input-output checks pass; only a small subset of keyword-based tasks work)
 
 ## Run
 

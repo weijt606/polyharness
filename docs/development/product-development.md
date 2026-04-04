@@ -9,9 +9,9 @@ version: "0.1.0"
 
 ## 1. 产品愿景
 
-**PolyHarness 是 AI Agent 生态的性能优化层——让 Claude Code、Claw Code、Codex 等现有 agent 自动进化，无需手动调参。**
+**PolyHarness 的目标是帮助现有 AI agent 持续迭代——让 Claude Code、Claw Code、Codex 等 agent 在你的任务上通过自动搜索寻找更合适的 harness 配置，减少手动调参。**
 
-**PolyHarness is the performance optimization layer for the AI Agent ecosystem — enabling Claude Code, Claw Code, Codex and other agents to evolve automatically without manual tuning.**
+**PolyHarness aims to help existing AI agents iterate more systematically — enabling Claude Code, Claw Code, Codex, and similar agents to search for better task-specific harness configurations with less manual tuning.**
 
 核心命题：Meta-Harness 论文证明了 "harness 设计是 agent 性能的主要杠杆"，且 harness 可以被自动搜索算法优化。当前论文只开源了最终产物（agent.py），未开源搜索框架本身。PolyHarness 填补这一空白，并将其产品化为 agent 开发者的标配工具。
 
@@ -23,7 +23,7 @@ Core proposition: The Meta-Harness paper proved that "harness design is the prim
 
 1. **产品优先**：先交付可安装、可运行的 CLI 产品，面向 agent 开发者和广泛用户，而非论文式一次性脚本。
 2. **生态优先**：核心能力不绑定单一 Agent 代码库，作为 agent 生态的通用优化层存在。
-3. **自动进化 + 研究验证并重**：主线价值是让现有 agent 自动变强；同时支持 Meta-Harness 论文的复现与扩展实验。
+3. **自动进化 + 研究验证并重**：主线价值是让现有 agent 能通过自动搜索持续迭代；同时支持 Meta-Harness 论文的复现与扩展实验。
 4. **多后端优先，深度定制后置**：主线支持 Claude Code/Claw Code/Codex/OpenCode 等多后端；单一后端深度定制以插件方式落地。
 
 这些原则直接决定了本项目采用 "通用优化框架 + 可插拔后端" 的路线，目标是成为 agent 生态的标配工具。
@@ -69,20 +69,20 @@ PolyHarness 编排器
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                     产品定位矩阵                          │
+│                     产品定位矩阵                           │
 │                                                          │
 │  高                                                      │
 │  ↑        ┌──────────────┐                               │
-│  自       │ Meta-Harness │ ← 论文（闭源搜索框架）          │
+│  自       │ Meta-Harness │ ← 论文（闭源搜索框架）            │
 │  动       │  (Stanford)  │                               │
 │  化   ┌───┴──────────────┴───┐                           │
-│  程   │  PolyHarness         │ ← Agent 生态的优化层        │
-│  度   │  (多 agent 适配)      │   让任意 agent 自动进化     │
+│  程   │  PolyHarness         │ ← 智能体生态的优化层         │
+│  度   │  (多智能体适配)        │   让任意智能体自动进化       │
 │       └───┬──────────────┬───┘                           │
-│  ↓        │ Claude Code  │ ← 手动配置 harness             │
+│  ↓        │ Claude Code  │ ← 手动配置工作流                │
 │  低       │ Codex / ...  │                               │
 │           └──────────────┘                               │
-│           低 ──── 适用范围 ────→ 高                       │
+│           低 ──── 适用范围 ────→ 高                        │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -108,14 +108,14 @@ PolyHarness 编排器
 ```
 输入：一个 coding agent 的 harness 代码 + 评估任务集
 过程：Meta-Harness 搜索循环自动迭代优化
-输出：性能更优的 harness 变体 + 搜索日志
+输出：候选 harness 变体 + 搜索日志（是否更优以评估结果为准）
 ```
 
 **场景 2：Prompt Pipeline 优化**
 ```
 输入：一个多步 prompt pipeline + 评分函数
 过程：Proposer 阅读历史结果，提出 pipeline 修改
-输出：优化后的 pipeline + 各版本性能对比
+输出：候选 pipeline 版本 + 各版本评估对比
 ```
 
 **场景 3：Tool Configuration 优化**
@@ -180,7 +180,7 @@ PolyHarness 编排器
 | 示例任务 | `examples/text-classification/` | 端到端运行一个 toy 任务 |
 | CLI 入口 | `ph run` | 一条命令启动搜索 |
 
-**MVP 验收标准**：在 toy 文本分类任务上，10 轮搜索后的 harness 优于初始 harness。
+**MVP 验收目标**：在 toy 文本分类任务上，10 轮搜索内至少出现一个评估分数高于初始 harness 的候选。该目标用于阶段验收，不表示对任意任务都保证改进。
 
 ### Phase 2：评估增强（预计 2-3 周）
 
@@ -251,6 +251,8 @@ PolyHarness 编排器
 
 ## 5. 成功指标
 
+以下指标分为产品目标和计划中的复现实验目标，用于路线图管理；除非另有说明，不代表仓库当前默认配置已经统一验证达到这些数值。
+
 ### 5.1 技术指标
 
 | 指标 | MVP 目标 | V1.0 目标 |
@@ -313,7 +315,15 @@ ph dashboard                 # 启动 Web Dashboard
 
 `ph doctor` 和 `ph init` 的设计参考 [Supermemory](https://github.com/supermemoryai/supermemory) 的多 Agent 插件对接模式——自动检测环境、利用各 Agent 的原生配置机制（CLAUDE.md / CLAW.md）注入 Proposer 指令，实现零手动配置。
 
-**包名**：`poly-harness`（PyPI）
+**包名**：`polyharness`（PyPI / npm）
+
+**一句话定位**：
+PolyHarness 是面向 AI agent 的开源优化引擎，用迭代搜索把 Meta-Harness 的核心思路产品化，让现有 agent 在具体任务上持续试验并筛选更合适的 harness 方案。
+
+**项目边界**：
+- 它优化的是现有 agent 的工作方式，而不是替代它们成为新的通用 coding agent。
+- 它更适合作为 Claude Code、Codex、ForgeCode 这类 agent 之上的搜索与改进引擎。
+- 它的价值在于把 prompt、工具配置、harness 逻辑和评估反馈连接成一个可重复运行的闭环。
 
 ## 8. 与现有研究和生态的关系
 
@@ -329,7 +339,7 @@ Meta-Harness 论文 (arXiv:2603.28052)
    └── PolyHarness (开源优化框架)  ← 我们在这里
        │
        ├── 面向 agent 用户：
-       │   └── pip install → ph run → 你的 agent 自动变强
+      │   └── pip install → ph run → 进入可重复优化循环
        │
        ├── 面向 agent 开发者：
        │   └── 适配器 API → 让自己的 agent 获得自动优化能力

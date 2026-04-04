@@ -15,7 +15,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="poly-harness")
+@click.version_option(version=__version__, prog_name="polyharness")
 @click.option("-v", "--verbose", is_flag=True, help="Show detailed output.")
 @click.option("-q", "--quiet", is_flag=True, help="Suppress non-essential output.")
 @click.pass_context

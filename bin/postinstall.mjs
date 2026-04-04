@@ -2,7 +2,7 @@
 
 /**
  * postinstall — attempt to install the Python package automatically.
- * Runs after `npm install poly-harness` (or `npm install -g poly-harness`).
+ * Runs after `npm install polyharness` (or `npm install -g polyharness`).
  * Silent failure is OK — user can install pip package manually.
  */
 
@@ -27,28 +27,28 @@ function tryInstall(cmd) {
 }
 
 if (isInstalled()) {
-  console.log("✅ poly-harness Python package already installed.");
+  console.log("✅ polyharness Python package already installed.");
   process.exit(0);
 }
 
-console.log("Installing poly-harness Python package...");
+console.log("Installing polyharness Python package...");
 
 // Try uv first (fast), then pip3, then pip
 const strategies = [
-  "uv pip install poly-harness",
-  "pip3 install poly-harness",
-  "pip install poly-harness",
+  "uv pip install polyharness",
+  "pip3 install polyharness",
+  "pip install polyharness",
 ];
 
 for (const cmd of strategies) {
   if (tryInstall(cmd)) {
-    console.log("✅ poly-harness installed successfully.");
+    console.log("✅ polyharness installed successfully.");
     process.exit(0);
   }
 }
 
 console.warn(
   "⚠️  Could not auto-install Python package. Please run manually:\n" +
-    "   pip install poly-harness"
+    "   pip install polyharness"
 );
 process.exit(0); // non-fatal — npm install should still succeed

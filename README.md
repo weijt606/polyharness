@@ -1,5 +1,16 @@
 # PolyHarness
 
+```text
+  _____      _        _    _                                   
+ |  __ \    | |      | |  | |                                  
+ | |__) |__ | |_   _ | |__| | __ _ _ __ _ __   ___  ___ ___    
+ |  ___/ _ \| | | | ||  __  |/ _` | '__| '_ \ / _ \/ __/ __|   
+ | |  | (_) | | |_| || |  | | (_| | |  | | | |  __/\__ \__ \   
+ |_|   \___/|_|\__, ||_|  |_|\__,_|_|  |_| |_|\___||___/___/   
+                __/ |                                          
+               |___/                                           
+```
+
 **Make your AI Agent evolve automatically.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -11,16 +22,16 @@
 
 Your AI agent runs the same harness every time. Same prompts, same tool config, same strategy — no matter how many times it fails.
 
-**PolyHarness fixes that.** It watches your agent work, learns from every iteration, and automatically discovers better configurations. You run one command — your agent gets smarter.
+**PolyHarness addresses that.** It records each iteration, evaluates candidate harness changes, and uses the accumulated history to search for better-scoring configurations. You run one command to start the loop.
 
 | | |
 |---|---|
-| **Self-Evolution** | Your agent automatically improves its own harness through iterative search. No manual tuning. |
+| **Self-Evolution** | Iteratively searches over harness changes and keeps the full evaluation history in one workspace. |
 | **6 Agent Backends** | Claude Code · Claw Code · Codex · OpenCode · API direct · Local — plug in any CLI agent. |
-| **Full History** | Every iteration's code, scores, and traces preserved. Non-Markovian search beats blind retries. |
+| **Full History** | Every iteration's code, scores, and traces preserved. The Meta-Harness paper reports that non-Markovian search outperforms blind retries. |
 | **Search Tree** | Visualize the optimization path. Compare any two candidates with per-task diffs. |
 | **One-Command Setup** | `ph init --base-harness ... --task-dir ...` — copies files, configures workspace, done. |
-| **Closed Loop** | init → run → inspect → apply. Best harness writes back to your project automatically. |
+| **Closed Loop** | init → run → inspect → apply. You choose when to write the best-scoring candidate back to your project. |
 
 ---
 
@@ -36,7 +47,15 @@ PolyHarness fills that gap. It's the open-source engine that makes Meta-Harness 
 
 > **Think of it this way:**
 > - Memory tools (like Supermemory) give agents persistent **memory** across conversations.
-> - **PolyHarness gives agents persistent self-evolution** — they get better at their job over time.
+> - **PolyHarness gives agents persistent self-evolution** — you get a repeatable way to refine how they work over time.
+
+## What PolyHarness Is
+
+PolyHarness is the open-source engine for iteratively searching over an agent's harness.
+
+It builds on ideas from the Meta-Harness paper and the TBench2 results reported there, while focusing this repository on the optimization workflow itself — how harness variants are proposed, evaluated, and revised over repeated runs.
+
+If tools like ForgeCode help you code, PolyHarness helps you search for task-specific harness improvements by iterating on prompts, tool use, and harness logic.
 
 ---
 
@@ -49,16 +68,16 @@ PolyHarness fills that gap. It's the open-source engine that makes Meta-Harness 
 ### I use AI coding agents
 
 You have Claude Code, Codex, or another agent.
-You want it to perform better on your specific tasks — without manually tweaking prompts.
+You want to tune it for your specific tasks — without manually tweaking prompts.
 
 ```bash
-pip install poly-harness
+pip install polyharness
 ph init --agent claude-code --task-dir ./my_tasks
 ph run
 ph apply
 ```
 
-Your agent's harness is now optimized. Done.
+You now have a repeatable optimization workspace. Inspect the results, then apply the best-scoring candidate if it improves your evaluation.
 
 **[→ Jump to Quick Start](#quick-start)**
 
@@ -71,7 +90,7 @@ You're developing an AI agent or tool and want
 to integrate automated optimization as a feature.
 
 PolyHarness provides a pluggable adapter API —
-implement 3 methods and your agent gets self-evolution.
+implement 3 methods and your agent can participate in the same search loop.
 
 ```python
 class MyAgentAdapter(CLIAdapter):
@@ -94,9 +113,9 @@ class MyAgentAdapter(CLIAdapter):
 ### 1. Install
 
 ```bash
-pip install poly-harness        # Python >= 3.12
+pip install polyharness         # Python >= 3.12
 # or
-npm install -g poly-harness     # Node.js wrapper, auto-installs Python package
+npm install -g polyharness      # Node.js wrapper, auto-installs Python package
 ```
 
 ### 2. Check your environment
@@ -124,7 +143,7 @@ This copies your harness code, test cases, and evaluation script into a structur
 ph run
 ```
 
-The orchestrator: copies your harness → asks the Proposer agent to improve it → evaluates the result → stores everything → repeats.
+The orchestrator: copies your harness → asks the Proposer agent for a candidate change → evaluates the result → stores everything → repeats.
 
 ### 5. Inspect and apply
 
@@ -163,13 +182,13 @@ ph log --workspace .ph_workspace
 #             └── iter_3  0.9000 ★
 ```
 
-Score jumps from 0.35 → 0.90 in 3 iterations. The `local` backend uses deterministic rules — real agent backends (Claude Code, Codex) can discover even more creative optimizations.
+The score path above is the current measured result of the bundled `math-word-problems` example with the repository's `local` backend, rounded for readability. It is not a paper benchmark or an external project result. The `local` backend is deterministic; no fixed score uplift is claimed here for Claude Code, Codex, or other real agent backends.
 
 ---
 
 ## How It Works
 
-PolyHarness runs a **Meta-Harness search loop** — an iterative process where an AI agent optimizes its own configuration:
+PolyHarness runs a **Meta-Harness-style search loop** — an iterative process where an AI agent proposes, evaluates, and stores harness changes:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -193,7 +212,7 @@ PolyHarness runs a **Meta-Harness search loop** — an iterative process where a
 │    │              └── loop ───────┘                          │
 │    │                              │                          │
 │    ├── ph log ───────────────────→│ Shows search tree        │
-│    ├── ph compare 0 5 ──────────→│ Score deltas + code diff │
+│    ├── ph compare 0 5  ──────────→│ Score deltas + code diff │
 │    └── ph apply ─────────────────→│ Writes best back         │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
@@ -235,15 +254,15 @@ When you run `ph init --agent claude-code`, PolyHarness automatically generates 
 ### pip (recommended)
 
 ```bash
-pip install poly-harness     # Requires Python >= 3.12
+pip install polyharness      # Requires Python >= 3.12
 ph --version
 ```
 
 ### npm / npx
 
 ```bash
-npm install -g poly-harness  # postinstall auto-installs Python package
-npx poly-harness doctor      # or run without global install
+npm install -g polyharness   # postinstall auto-installs Python package
+npx polyharness doctor       # or run without global install
 ```
 
 The npm package is a thin Node.js wrapper (`bin/ph.mjs`) that finds and invokes the Python CLI. It checks: `ph` on PATH → `python -m poly_harness` → auto-discovers `.venv` in parent directories.
@@ -251,8 +270,8 @@ The npm package is a thin Node.js wrapper (`bin/ph.mjs`) that finds and invokes 
 ### From source
 
 ```bash
-git clone https://github.com/weijt606/poly-harness.git
-cd poly-harness
+git clone https://github.com/weijt606/polyharness.git
+cd polyharness
 
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -314,6 +333,8 @@ python -m poly_harness --version
 ---
 
 ## Examples
+
+The score trajectories below are measured from the bundled examples using the current `local` backend and are rounded for readability. They are not borrowed from the Meta-Harness paper or from external benchmarks.
 
 ### Text Classification (sentiment analysis)
 
@@ -410,7 +431,7 @@ tests/                       # 121 tests (pytest)
 ## Local Development
 
 ```bash
-git clone https://github.com/weijt606/poly-harness.git && cd poly-harness
+git clone https://github.com/weijt606/polyharness.git && cd polyharness
 python -m venv .venv && source .venv/bin/activate
 pip install anthropic click pydantic pyyaml rich pytest pytest-cov ruff
 export PYTHONPATH="$PWD/src"
@@ -423,9 +444,7 @@ ruff check src/ tests/       # lint
 
 - [Product Development](docs/development/product-development.md) — roadmap, user scenarios, success metrics
 - [Technical Architecture](docs/development/technical-architecture.md) — system design & data flow
-- [Meta-Harness Paper](docs/research/references/meta-harness-paper.md) — theoretical foundation
-- [Information Bottleneck Hypothesis](docs/research/information-bottleneck-hypothesis.md) — why full context matters
-- [TBench2 Artifact Analysis](docs/research/tbench2-artifact-code-analysis.md)
+- [Meta-Harness Paper](docs/research/references/meta-harness-paper.md) — theoretical foundation and paper-reported reference results
 
 ---
 
