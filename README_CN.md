@@ -129,13 +129,20 @@ ph doctor
 ### 3. 初始化 workspace
 
 ```bash
-ph init --agent claude-code \
-        --base-harness ./my_harness/ \
-        --task-dir ./my_tasks/ \
-        --eval-script ./evaluate.py
+ph init --agent claude-code         --base-harness ./my_harness/         --task-dir ./my_tasks/         --eval-script ./evaluate.py
 ```
 
-这会把你的 harness 代码、测试用例和评估脚本复制到结构化的 workspace 中，并自动完成配置，无需手动编辑 YAML。
+这会将原有项目代码复制到一个隔离的 **优化 Workspace** 中（默认在当前目录下创建 `.ph_workspace`，也可通过 `--workspace` 指定其他目录）。
+
+**配置你的 Agent**
+
+PolyHarness 会通过沙盒编排将你的 Agent 的工作目录（CWD）限制在该 workspace 内部，确保它能在不破坏原工程的前提下，安全地读取历史评估信息，并就地修改代码副本。
+
+| 使用场景 | 配置方法 |
+|----------|------------------|
+| **受原生支持的 CLI Agent 工具** | 使用 `ph init --agent <name>`。系统会自动注入其专属提示词指令（如 `CLAUDE.md`）。<br>*(支持: claude-code, claw-code, codex, opencode)* |
+| **直接调用大模型接口（无CLI）** | 使用 `ph init --agent api`。无需第三方命令行工具，只需在 `ph run` 前设置系统变量 `export OPENAI_API_KEY="sk-..."`。 |
+| **CLI 命令被自定义 / 路径未响应** | 如果你的 CLI Agent 使用了非标命令（或未设置全局 PATH），请在初始化后手动修改 workspace 根目录下的 `config.yaml`：<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }` |
 
 ### 4. 运行优化循环
 
@@ -172,7 +179,6 @@ ph init --agent local \
         --task-dir . \
         --workspace .ph_workspace
 
-ph run --workspace .ph_workspace --max-iterations 5
 ph log --workspace .ph_workspace
 
 # Search Tree
@@ -340,8 +346,8 @@ python -m polyharness --version
 
 ```bash
 cd examples/text-classification
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 3
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 3
 
 # iter_0: 0.65 → iter_1: 1.00 ★ （简单词表 → 扩展词库）
 ```
@@ -350,8 +356,8 @@ ph run --workspace .ws --max-iterations 3
 
 ```bash
 cd examples/math-word-problems
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.35 → iter_1: 0.50 → iter_2: 0.65 → iter_3: 0.90 ★
 # （简单乘法 → 运算检测 → 均值/百分比 → 多步推理）
@@ -361,8 +367,8 @@ ph run --workspace .ws --max-iterations 5
 
 ```bash
 cd examples/code-generation
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.27 → iter_1: 0.50 → iter_2: 0.68 → iter_3: 0.95 ★
 # （5 个关键词 → 10 种模式 → 复合逻辑 → 全面覆盖）
@@ -372,8 +378,8 @@ ph run --workspace .ws --max-iterations 5
 
 ```bash
 cd examples/api-calling
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.19 → iter_1: 0.55 → iter_2: 0.77 → iter_3: 0.87 ★
 # （关键词匹配 → 宽泛路由 → 参数辅助 → 完整正则提取）
@@ -383,8 +389,8 @@ ph run --workspace .ws --max-iterations 5
 
 ```bash
 cd examples/rag-qa
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.51 → iter_1: 0.79 ★
 # （词重叠 → 停用词过滤检索 + 句子评分）

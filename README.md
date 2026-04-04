@@ -129,13 +129,20 @@ This auto-detects which agent backends (Claude Code, Codex, etc.) are installed 
 ### 3. Initialize a workspace
 
 ```bash
-ph init --agent claude-code \
-        --base-harness ./my_harness/ \
-        --task-dir ./my_tasks/ \
-        --eval-script ./evaluate.py
+ph init --agent claude-code         --base-harness ./my_harness/         --task-dir ./my_tasks/         --eval-script ./evaluate.py
 ```
 
-This copies your harness code, test cases, and evaluation script into a structured workspace — and auto-configures everything. No manual YAML editing.
+This copies your harness code, test cases, and evaluation script into an isolated **optimization workspace** (by default `.ph_workspace` in the current directory, or the folder specified by `--workspace`).
+
+**Configure Your Agent**
+
+PolyHarness automatically sandboxes your agent inside this workspace, ensuring it only edits candidate copies and safely reads history traces.
+
+| Scenario | How to configure |
+|----------|------------------|
+| **Supported CLI Tools** | Run `ph init --agent <name>`. PolyHarness auto-injects required instructions (e.g., `CLAUDE.md`).<br>*(Supported: claude-code, claw-code, codex, opencode)* |
+| **API / LLM Directly** | Run `ph init --agent api`. No CLI tool required, just run `export OPENAI_API_KEY="sk-..."` before `ph run`. |
+| **Custom CLI path** | If your CLI agent uses a non-standard command, edit `config.yaml` in the workspace before running:<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }`|
 
 ### 4. Run the optimization loop
 
@@ -172,7 +179,6 @@ ph init --agent local \
         --task-dir . \
         --workspace .ph_workspace
 
-ph run --workspace .ph_workspace --max-iterations 5
 ph log --workspace .ph_workspace
 
 # Search Tree
@@ -340,8 +346,8 @@ The score trajectories below are measured from the bundled examples using the cu
 
 ```bash
 cd examples/text-classification
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 3
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 3
 
 # iter_0: 0.65 → iter_1: 1.00 ★  (naive word list → expanded lexicon)
 ```
@@ -350,8 +356,8 @@ ph run --workspace .ws --max-iterations 3
 
 ```bash
 cd examples/math-word-problems
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.35 → iter_1: 0.50 → iter_2: 0.65 → iter_3: 0.90 ★
 # (naive multiply → operation detection → averages/% → multi-step reasoning)
@@ -361,8 +367,8 @@ ph run --workspace .ws --max-iterations 5
 
 ```bash
 cd examples/code-generation
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.27 → iter_1: 0.50 → iter_2: 0.68 → iter_3: 0.95 ★
 # (5 keywords → 10 patterns → composite logic → comprehensive coverage)
@@ -372,8 +378,8 @@ ph run --workspace .ws --max-iterations 5
 
 ```bash
 cd examples/api-calling
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.19 → iter_1: 0.55 → iter_2: 0.77 → iter_3: 0.87 ★
 # (keyword matching → broad routing → param helpers → full regex extraction)
@@ -383,8 +389,8 @@ ph run --workspace .ws --max-iterations 5
 
 ```bash
 cd examples/rag-qa
-ph init --agent local --base-harness ./base_harness --task-dir . --workspace .ws
-ph run --workspace .ws --max-iterations 5
+ph init --agent local --base-harness ./base_harness --task-dir .
+ph run --max-iterations 5
 
 # iter_0: 0.51 → iter_1: 0.79 ★
 # (word overlap → stopword-filtered retrieval + sentence scoring)

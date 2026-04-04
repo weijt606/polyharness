@@ -45,8 +45,8 @@ def doctor():
 @click.option(
     "--workspace",
     type=click.Path(),
-    default=".",
-    help="Workspace directory (default: current dir).",
+    default=".ph_workspace",
+    help="Workspace directory (default: .ph_workspace).",
 )
 @click.option(
     "--task-dir",
@@ -92,7 +92,7 @@ def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | No
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option("--max-iterations", type=int, default=None, help="Override max iterations.")
@@ -148,7 +148,7 @@ def run(
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 def status(workspace: str):
@@ -220,7 +220,7 @@ def status(workspace: str):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option(
@@ -263,7 +263,7 @@ def apply(workspace: str, target: str | None):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option("--no-diff", is_flag=True, help="Skip code diff output.")
@@ -391,7 +391,7 @@ def compare(left: str, right: str, workspace: str, no_diff: bool):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 def best(workspace: str):
@@ -435,7 +435,7 @@ def best(workspace: str):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option("--flat", is_flag=True, help="Show flat chronological list instead of tree.")
@@ -561,7 +561,7 @@ def _print_log_flat(entries, best_i: int, parent_scores: dict[int, float] | None
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option(
@@ -636,7 +636,7 @@ def export_cmd(target: str, workspace: str, iteration: int | None, include_meta:
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option("--keep-best", is_flag=True, help="Keep the best candidate directory.")
@@ -705,7 +705,7 @@ def config_group():
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 def config_show(workspace: str):
@@ -729,7 +729,7 @@ def config_show(workspace: str):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 def config_set(key: str, value: str, workspace: str):
@@ -803,7 +803,7 @@ def config_set(key: str, value: str, workspace: str):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option("--no-diff", is_flag=True, help="Skip code diff output.")
@@ -825,7 +825,7 @@ def diff(iteration: int, workspace: str, no_diff: bool):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option("-n", "--top", type=int, default=None, help="Show only top N candidates.")
@@ -907,7 +907,7 @@ def leaderboard(workspace: str, top: int | None, tasks: bool):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option("--task", type=str, default=None, help="Show traces for a specific task only.")
@@ -1013,7 +1013,7 @@ def trace(iteration: int, workspace: str, task: str | None):
 @click.option(
     "--workspace",
     type=click.Path(exists=True),
-    default=".",
+    default=".ph_workspace",
     help="Workspace directory.",
 )
 @click.option(
