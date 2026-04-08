@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-161%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-165%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -30,7 +30,7 @@ Your AI agent runs the same harness every time. Same prompts, same tool config, 
 | | |
 |---|---|
 | **Self-Evolution** | Iteratively searches over harness changes and keeps the full evaluation history in one workspace. |
-| **6 Agent Backends** | Claude Code · Claw Code · Codex · OpenCode · API direct · Local — plug in any CLI agent. |
+| **7 Agent Backends** | Claude Code · Claw Code · Codex · OpenCode · API direct · OpenAI-compatible · Local — plug in any CLI agent. |
 | **Full History** | Every iteration's code, scores, and traces preserved. The Meta-Harness paper reports that non-Markovian search outperforms blind retries. |
 | **Search Tree** | Visualize the optimization path. Compare any two candidates with per-task diffs. |
 | **One-Command Setup** | `ph init --base-harness ... --task-dir ...` — copies files, configures workspace, done. |
@@ -472,13 +472,13 @@ harness:
     - prompt_template.txt
 
 evolution:
-  mode: online                 # batch | online
+  mode: batch                  # batch | online
   trigger:
     strategy: accumulate        # degradation | accumulate | cron | manual
-    accumulate_count: 10        # Trigger after N new traces
+    accumulate_count: 50        # Trigger after N new traces (default: 50)
     min_samples: 5              # Minimum traces before evolution
     window_size: 20             # Sliding window for score analysis
-    threshold: 0.05             # Score drop that triggers degradation strategy
+    threshold: -0.05            # Score drop that triggers degradation strategy
   auto_apply: false             # Automatically apply improved harness
   max_iterations: 3             # Iterations per evolution cycle
   record_output: true           # Capture stdout/stderr in traces
@@ -652,41 +652,6 @@ ph run --max-iterations 5
 
 ---
 
-## Online Self-Evolution (v0.2.0)
-
-Beyond batch optimization (`ph run`), PolyHarness can improve your agent's harness **while you work**.
-
-### How it works
-
-1. **Wrap your agent** — `ph wrap` transparently forwards any command while recording execution traces (duration, exit code, output).
-2. **Traces accumulate** — each invocation is stored with metadata in `~/.polyharness/traces/`.
-3. **Trigger evolution** — when enough data is collected, `ph evolve` runs a lightweight search cycle using the traces as context.
-
-```bash
-# 1. Wrap your agent (use it normally — output passes through)
-ph wrap claude -p "Fix the login bug in auth.py"
-ph wrap claude -p "Add unit tests for the parser"
-
-# 2. Check what's been collected
-ph traces list
-ph traces stats
-
-# 3. Evolve the harness based on real usage patterns
-ph evolve --workspace .ph_workspace --max-iterations 3
-```
-
-The agent's output is always forwarded transparently — `ph wrap` is invisible to your workflow except for the trace recording.
-
-```bash
-# Traces management
-ph traces list              # table of recent traces
-ph traces show <id>         # full detail + captured output
-ph traces stats             # summary: total, scored, per-agent breakdown
-ph traces clear --keep 50   # prune old traces, keep newest 50
-```
-
----
-
 ## Project Structure
 
 ```
@@ -702,6 +667,7 @@ src/polyharness/
 │   └── evaluator.py         # PythonEvaluator (subprocess)
 ├── proposer/
 │   ├── api_proposer.py      # Anthropic API direct + tool-use loop
+│   ├── openai_proposer.py   # OpenAI-compatible API (Ollama, vLLM, etc.)
 │   ├── cli_proposer.py      # CLIProposer — unified subprocess management
 │   ├── local_proposer.py    # Offline rule-based (5 task types)
 │   └── adapters/            # Per-agent CLI adapters
@@ -714,7 +680,7 @@ bin/
 ├── ph.mjs                   # npm wrapper
 └── postinstall.mjs          # npm postinstall
 
-tests/                       # 161 tests (pytest)
+tests/                       # 165 tests (pytest)
 ```
 
 ## Local Development

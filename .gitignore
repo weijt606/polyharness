@@ -50,6 +50,9 @@ package-lock.json
 .tmp_ws/
 .ws/
 
+# examples/ duplicates src/polyharness/templates/ — use templates as source of truth
+examples/
+
 # Environment
 .env
 .env.local

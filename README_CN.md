@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-161%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-165%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -30,7 +30,7 @@
 | | |
 |---|---|
 | **自动进化** | 通过迭代搜索探索 harness 变更，并把完整评估历史保存在同一个 workspace 中。 |
-| **6 个 Agent 后端** | Claude Code · Claw Code · Codex · OpenCode · API 直连 · Local，可接入任何 CLI agent。 |
+| **7 个 Agent 后端** | Claude Code · Claw Code · Codex · OpenCode · API 直连 · OpenAI 兼容 · Local，可接入任何 CLI agent。 |
 | **完整历史** | 每轮迭代的代码、分数、执行轨迹完整保留。Meta-Harness 论文报告非马尔可夫搜索优于盲目重试。 |
 | **搜索树** | 可视化优化路径，对比任意两个候选的逐任务差异。 |
 | **一条命令完成初始化** | `ph init --base-harness ... --task-dir ...`，复制文件、配置 workspace，一步完成。 |
@@ -472,13 +472,13 @@ harness:
     - prompt_template.txt
 
 evolution:
-  mode: online                 # batch | online
+  mode: batch                  # batch | online
   trigger:
     strategy: accumulate        # degradation | accumulate | cron | manual
-    accumulate_count: 10        # 每积累 N 条新 trace 触发进化
+    accumulate_count: 50        # 每积累 N 条新 trace 触发进化（默认：50）
     min_samples: 5              # 进化前最少 trace 数
     window_size: 20             # 分数分析滑动窗口大小
-    threshold: 0.05             # 触发 degradation 策略的分数下降阈值
+    threshold: -0.05            # 触发 degradation 策略的分数下降阈值
   auto_apply: false             # 自动应用改进后的 harness
   max_iterations: 3             # 每轮进化的迭代次数
   record_output: true           # 在 trace 中捕获 stdout/stderr
@@ -652,41 +652,6 @@ ph run --max-iterations 5
 
 ---
 
-## 在线自我进化（v0.2.0）
-
-除了批量优化（`ph run`），PolyHarness 还能在**你日常使用 agent 的过程中**持续改进 harness。
-
-### 工作原理
-
-1. **包裹你的 agent** — `ph wrap` 透明转发任意命令，同时记录执行 trace（耗时、退出码、输出）。
-2. **Traces 持续积累** — 每次调用的元数据存储在 `~/.polyharness/traces/` 中。
-3. **触发进化** — 当数据足够多时，`ph evolve` 以 traces 为上下文运行一轮轻量搜索循环。
-
-```bash
-# 1. 包裹你的 agent（正常使用，输出原样透传）
-ph wrap claude -p "修复 auth.py 中的登录 bug"
-ph wrap claude -p "给 parser 添加单元测试"
-
-# 2. 查看收集情况
-ph traces list
-ph traces stats
-
-# 3. 基于真实使用模式进化 harness
-ph evolve --workspace .ph_workspace --max-iterations 3
-```
-
-Agent 的输出始终透明转发 — `ph wrap` 对你的工作流完全无感，只多了 trace 记录。
-
-```bash
-# Trace 管理
-ph traces list              # 最近 traces 表格
-ph traces show <id>         # 完整详情 + 捕获的输出
-ph traces stats             # 汇总：总数、已评分、各 agent 分布
-ph traces clear --keep 50   # 清理旧 traces，保留最新 50 条
-```
-
----
-
 ## 项目结构
 
 ```
@@ -702,6 +667,7 @@ src/polyharness/
 │   └── evaluator.py         # PythonEvaluator（子进程）
 ├── proposer/
 │   ├── api_proposer.py      # Anthropic API 直连 + tool-use 循环
+│   ├── openai_proposer.py   # OpenAI 兼容 API（Ollama、vLLM 等）
 │   ├── cli_proposer.py      # CLIProposer —— 统一子进程管理
 │   ├── local_proposer.py    # 离线规则引擎（5 种任务类型）
 │   └── adapters/            # 逐 agent CLI 适配器
@@ -714,7 +680,7 @@ bin/
 ├── ph.mjs                   # npm 包装器
 └── postinstall.mjs          # npm postinstall
 
-tests/                       # 161 个测试（pytest）
+tests/                       # 165 个测试（pytest）
 ```
 
 ## 本地开发
