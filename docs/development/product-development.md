@@ -249,6 +249,215 @@ PolyHarness 编排器
 | `ph report` | Markdown 报告（配置表 + 迭代日志 + ASCII sparkline） | ✅ |
 | `ph run --strategy` | 运行时覆盖父候选选择策略 | ✅ |
 
+### Phase 3.6：模板与生命周期命令（v0.1.3，已完成） ✅
+
+| 任务 | 交付物 | 状态 |
+|------|--------|------|
+| `ph new <dir>` 脚手架命令 | 生成 harness.py + test_cases.json + evaluate.py | ✅ |
+| `ph init --template` | 从 5 个内置模板一键创建 workspace | ✅ |
+| `ph upgrade` | 通过 pip 检查并升级 PolyHarness | ✅ |
+| `ph uninstall` | 确认后卸载（`-y` 跳过确认） | ✅ |
+| 模板打包 | `examples/` 合并入 `src/polyharness/templates/`，随 pip 分发 | ✅ |
+| README 重构 | Option A（模板） + Option B（`ph new`）两条路径 | ✅ |
+| 测试覆盖 | 128 tests passing | ✅ |
+
+---
+
+### Phase 5：在线自我进化 — v0.2.0 核心特性（规划中）
+
+> **核心目标**：让 Agent 在用户日常使用过程中自动积累经验、触发优化、完成自我进化——而不是要求用户手动运行 `ph run`。
+
+v0.1.x 实现了"批量优化"模式：用户显式运行 `ph run` → N 轮搜索 → `ph apply`。这是 Meta-Harness 论文的核心搜索循环，适合**有明确评估任务的离线优化**。
+
+v0.2.0 要解决的是另一个问题：**Agent 在真实工作中如何持续进化？** 用户不会每天运行 `ph run`，但用户每天都在使用 Agent。如果能在使用过程中自动收集 Agent 的表现数据，当积累到足够数据时自动触发一轮优化，Agent 就能实现"使用即进化"。
+
+#### 5.1 v0.1.x vs v0.2.0 模式对比
+
+```
+v0.1.x — 批量优化（Batch Optimization）
+═══════════════════════════════════════════
+用户 ─── ph run ───→ [N 轮搜索循环] ───→ ph apply ───→ 回写
+         ↑ 手动触发                        ↑ 手动确认
+
+v0.2.0 — 在线进化（Online Evolution）
+═══════════════════════════════════════════
+用户正常使用 Agent ──→ Collector 记录每次执行结果
+                            │
+                            ↓ (自动累积)
+                     Trigger 检测到退化或积累足够数据
+                            │
+                            ↓ (自动触发)
+                     [小规模搜索循环: 1-3 轮]
+                            │
+                            ↓ (自动通知)
+                     "发现更优 harness，是否 apply？"
+```
+
+#### 5.2 三层架构
+
+| 层 | 组件 | 职责 | 实现方式 |
+|----|------|------|---------|
+| **收集层** | Trace Collector | 在 Agent 日常使用时记录执行结果 | `ph wrap` 命令包装 Agent CLI / 后台守护进程 `ph watch` |
+| **决策层** | Evolution Trigger | 何时触发优化搜索 | 策略引擎：累积 N 次 / 分数退化 / 定时 / 手动 |
+| **执行层** | Auto Optimizer | 执行小规模搜索 + 通知用户 | 复用现有 Orchestrator，新增通知机制 |
+
+#### 5.3 收集层设计
+
+**方案 A：`ph wrap` — Agent 包装器**
+
+```bash
+# 用户用 ph wrap 替代直接调用 agent
+# 之前:
+claude-code "fix the bug in auth.py"
+# 之后:
+ph wrap claude-code "fix the bug in auth.py"
+```
+
+`ph wrap` 透明转发 Agent 调用，额外做三件事：
+1. 记录输入（任务描述 / prompt）
+2. 记录输出（Agent 的执行结果 / 生成的代码）
+3. 可选：运行 evaluate.py 对本次结果评分
+
+收集数据存入 `~/.polyharness/traces/` 全局目录，与 workspace 解耦。
+
+**方案 B：`ph watch` — 后台守护进程**
+
+```bash
+ph watch --workspace .ph_workspace --interval 30m
+```
+
+守护进程定期扫描 workspace 中是否有新的执行结果（由用户的 CI/CD、测试框架、或 Agent 自身产生），有则归档。
+
+**方案 C：SDK 集成（面向框架开发者）**
+
+```python
+from polyharness import Collector
+
+collector = Collector(workspace="~/.polyharness")
+
+# 在你的 Agent 框架中调用
+result = my_agent.run(task)
+collector.record(task=task, result=result, score=evaluate(result))
+```
+
+v0.2.0 MVP 优先实现**方案 A（`ph wrap`）**，它不侵入 Agent 源码，用户改一行命令即可接入。
+
+#### 5.4 决策层设计 — Evolution Trigger
+
+```yaml
+# config.yaml 新增配置段
+evolution:
+  mode: online              # batch (v0.1.x 行为) | online (v0.2.0)
+  trigger:
+    strategy: degradation   # degradation | accumulate | cron | manual
+    # degradation: 滑动窗口检测分数下降
+    min_samples: 10          # 最少收集 N 次数据后才触发
+    window_size: 20          # 滑动窗口大小
+    threshold: -0.05         # 分数下降超过此阈值触发
+    # accumulate: 每收集 N 次数据触发一轮
+    accumulate_count: 50
+    # cron: 定时触发
+    cron: "0 2 * * *"        # 每天凌晨 2 点
+  auto_apply: false          # true = 自动回写（危险）; false = 通知用户确认
+  max_iterations: 3          # 在线模式单次搜索最大轮次（轻量）
+  notify:
+    method: terminal         # terminal | webhook | email
+    webhook_url: null
+```
+
+**四种触发策略**：
+
+| 策略 | 触发条件 | 适用场景 |
+|------|---------|---------|
+| `degradation` | 滑动窗口内分数均值低于历史最佳超过阈值 | 检测性能退化，最实用 |
+| `accumulate` | 每收集 N 次执行记录 | 稳定积累，周期性优化 |
+| `cron` | 定时开启 | 低频优化，适合 CI 环境 |
+| `manual` | 用户手动 `ph evolve` | 保持 v0.1.x 的显式控制感 |
+
+#### 5.5 新增 CLI 命令
+
+| 命令 | 功能 |
+|------|------|
+| `ph wrap <agent-cmd> [args...]` | 包装 Agent 调用，透明转发 + 记录 trace |
+| `ph watch` | 启动后台守护进程，监听 workspace 变化 |
+| `ph evolve` | 手动触发一轮在线进化（基于已收集的 trace） |
+| `ph traces` | 查看收集到的 trace 列表和统计 |
+| `ph traces show <id>` | 查看单条 trace 详情 |
+| `ph traces clear` | 清理历史 trace |
+
+#### 5.6 数据流 — 完整的在线进化闭环
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  v0.2.0 Online Evolution                        │
+│                                                                 │
+│  用户日常使用                                                     │
+│    │                                                            │
+│    ├── ph wrap claude-code "fix auth bug"                       │
+│    │     │                                                      │
+│    │     ├── 透明转发 → claude-code 正常执行                      │
+│    │     ├── Collector 记录 input/output/score                   │
+│    │     └── 返回原始结果给用户（零感知延迟）                       │
+│    │                                                            │
+│    ├── ph wrap claude-code "add unit tests"                     │
+│    │     └── ... (持续积累)                                      │
+│    │                                                            │
+│    ↓ (积累到 min_samples / 检测到退化)                            │
+│                                                                 │
+│  Evolution Trigger 激活                                          │
+│    │                                                            │
+│    ├── 从 traces 中构建评估任务集                                  │
+│    ├── 启动 Orchestrator.run(max_iterations=3)                   │
+│    ├── Proposer 读取历史 traces + 搜索日志                        │
+│    └── 完成后通知：                                               │
+│          "iter_2 score 0.87 > current 0.72. Apply? [y/N]"       │
+│                                                                 │
+│  用户确认                                                        │
+│    └── ph apply → 回写最优 harness                               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 5.7 实现分期
+
+**v0.2.0-alpha：收集 + 手动触发**
+
+| 任务 | 交付物 | 优先级 |
+|------|--------|--------|
+| Trace Collector 核心 | `collector.py` — 记录 input/output/score | P0 |
+| `ph wrap` 命令 | CLI 包装器，透明转发 + 收集 | P0 |
+| `ph traces` 命令 | 查看/管理收集到的 trace | P0 |
+| `ph evolve` 命令 | 手动触发在线进化 | P0 |
+| 全局 trace 存储 | `~/.polyharness/traces/` 目录规范 | P0 |
+
+**v0.2.0-beta：自动触发 + 通知**
+
+| 任务 | 交付物 | 优先级 |
+|------|--------|--------|
+| Evolution Trigger 引擎 | 4 种触发策略实现 | P1 |
+| `ph watch` 守护进程 | 后台监听 + 自动触发 | P1 |
+| 通知机制 | terminal 通知 + webhook | P1 |
+| `evolution:` 配置段 | config.yaml 扩展 | P1 |
+| 自动构建评估任务 | 从 traces 提取 task cases | P1 |
+
+**v0.2.0-rc：SDK + 生态集成**
+
+| 任务 | 交付物 | 优先级 |
+|------|--------|--------|
+| Python SDK | `from polyharness import Collector` | P2 |
+| CI/CD 集成 | GitHub Action for ph evolve | P2 |
+| 多 workspace 联合进化 | 跨项目 trace 汇总 | P2 |
+
+#### 5.8 与 v0.1.x 的兼容性
+
+| 方面 | 兼容策略 |
+|------|---------|
+| `ph run` | 保持不变，仍然是批量优化入口 |
+| `config.yaml` | `evolution.mode: batch` 为默认值，v0.1.x 行为完全相同 |
+| Workspace 结构 | 新增 `traces/` 子目录，不影响现有文件 |
+| Orchestrator | 新增 `run_online()` 方法，`run()` 不变 |
+| 升级路径 | `pip install --upgrade`，无 breaking changes |
+
 ## 5. 成功指标
 
 以下指标分为产品目标和计划中的复现实验目标，用于路线图管理；除非另有说明，不代表仓库当前默认配置已经统一验证达到这些数值。
@@ -279,6 +488,16 @@ PolyHarness 编排器
 | 社区贡献的 harness 模板 | >10 |
 | 文档覆盖率 | 所有公开 API 有文档 |
 
+### 5.4 在线进化指标（v0.2.0）
+
+| 指标 | 目标 |
+|------|------|
+| `ph wrap` 延迟开销 | <100ms（不影响 Agent 正常响应） |
+| Trace 收集完整率 | >99%（不丢失记录） |
+| 自动触发准确率 | >80% 的触发产生有效优化候选 |
+| 进化周期 | 从"检测到退化"到"通知用户"<10 min |
+| 无感接入 | 用户改一行命令即可启用（`ph wrap`） |
+
 ## 6. 风险与缓解
 
 | 风险 | 影响 | 可能性 | 缓解策略 |
@@ -289,6 +508,9 @@ PolyHarness 编排器
 | **搜索不收敛** | Proposer 无法有效利用诊断信息 | 中 | 从论文的 proposer prompt 出发；添加搜索多样性机制 |
 | **法律/许可风险** | Claw Code 代码的法律地位 | 低 | 本项目只使用 Claw Code 作为外部工具，不包含其源码 |
 | **上下文窗口不够** | 200K 窗口限制 vs 论文 10M | 中 | Proposer 通过工具选择性读取；实现智能 trace 检索 |
+| **在线收集隐私风险** | `ph wrap` 记录用户与 Agent 的交互内容 | 中 | 默认只记录 score 和 metadata，不记录完整输出；本地存储，不上传；用户可配置记录粒度 |
+| **自动触发误判** | 分数波动导致不必要的优化搜索 | 中 | `min_samples` 门槛 + 滑动窗口平滑；`auto_apply: false` 默认不自动回写 |
+| **守护进程资源消耗** | `ph watch` 长期运行占用系统资源 | 低 | 轻量事件驱动架构；idle 时 CPU 占用 <1% |
 
 ## 7. 项目命名与品牌
 
@@ -299,15 +521,26 @@ PolyHarness 编排器
 # 环境与配置 / Environment
 ph doctor                    # 检测已安装的 agent / Detect installed agents
 ph init --agent claude-code  # 为指定 agent 创建优化 workspace / Create workspace for agent
+ph new my-project            # 生成脚手架 / Scaffold new harness project
 
-# 优化 / Optimization
+# 批量优化 / Batch Optimization (v0.1.x)
 ph run                       # 启动自动搜索 / Start auto-search
 ph status                    # 查看搜索进度 / View progress
+
+# 在线进化 / Online Evolution (v0.2.0)
+ph wrap claude-code "task"   # 包装 Agent 调用并记录 / Wrap agent call + collect traces
+ph watch                     # 后台守护进程 / Background daemon for auto-trigger
+ph evolve                    # 手动触发进化 / Manually trigger evolution
+ph traces                    # 查看收集记录 / View collected traces
 
 # 应用 / Apply
 ph apply                     # 将最优配置回写到 agent / Write best config back to agent
 ph compare iter_3 iter_7     # 对比两个候选 / Compare candidates
 ph best                      # 查看最佳候选 / View best candidate
+
+# 生命周期 / Lifecycle
+ph upgrade                   # 升级 PolyHarness / Upgrade via pip
+ph uninstall                 # 卸载 / Uninstall
 
 # 可视化 / Visualization
 ph dashboard                 # 启动 Web Dashboard

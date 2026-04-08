@@ -1268,3 +1268,279 @@ class CustomParentSelector(ParentSelector):
         # 用户自定义逻辑
         ...
 ```
+
+## 11. 在线自我进化架构（v0.2.0）
+
+v0.1.x 的搜索循环是**批量模式**——用户显式运行 `ph run`，在离线评估任务集上迭代。v0.2.0 引入**在线进化模式**：Agent 在日常使用过程中自动积累经验、检测退化、触发优化，实现"使用即进化"。
+
+### 11.1 架构总览
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                  v0.2.0 Online Evolution Architecture             │
+│                                                                  │
+│  用户日常使用 Agent                                                │
+│    │                                                             │
+│    ▼                                                             │
+│  ┌──────────────┐     ┌───────────────┐     ┌───────────────┐    │
+│  │  ph wrap      │────→│  Collector    │────→│  Trace Store  │    │
+│  │  (透明代理)    │     │  (收集层)      │     │  ~/.polyharness│   │
+│  └──────────────┘     └───────────────┘     │  /traces/     │    │
+│         │                                    └──────┬────────┘    │
+│         ▼                                           │             │
+│  Agent 正常执行                                      ▼             │
+│  结果返回用户                              ┌──────────────────┐    │
+│                                           │ Evolution Trigger│    │
+│                                           │ (决策层)         │    │
+│                                           │                  │    │
+│                                           │ • degradation    │    │
+│                                           │ • accumulate     │    │
+│                                           │ • cron           │    │
+│                                           │ • manual         │    │
+│                                           └────────┬─────────┘    │
+│                                                    │ trigger      │
+│                                                    ▼              │
+│                                           ┌──────────────────┐    │
+│                                           │ Auto Optimizer   │    │
+│                                           │ (执行层)         │    │
+│                                           │                  │    │
+│                                           │ Orchestrator     │    │
+│                                           │ .run_online()    │    │
+│                                           │ max_iter=3       │    │
+│                                           └────────┬─────────┘    │
+│                                                    │              │
+│                                                    ▼              │
+│                                           ┌──────────────────┐    │
+│                                           │ Notifier         │    │
+│                                           │ "Found better    │    │
+│                                           │  harness. Apply?"│    │
+│                                           └──────────────────┘    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 11.2 Collector（收集器）
+
+收集器是在线进化的入口——在不侵入 Agent 源码的前提下，记录每次使用的执行数据。
+
+```python
+# 伪代码：collector.py
+
+class Collector:
+    """Trace 收集器 — 记录 Agent 日常使用数据"""
+
+    def __init__(self, store_dir: Path = Path.home() / ".polyharness" / "traces"):
+        self.store_dir = store_dir
+        self.store_dir.mkdir(parents=True, exist_ok=True)
+
+    def record(
+        self,
+        agent: str,          # e.g. "claude-code"
+        command: list[str],   # 原始命令
+        stdin: str | None,    # 输入
+        stdout: str,          # Agent 输出
+        stderr: str,          # 错误输出
+        exit_code: int,       # 退出码
+        duration: float,      # 执行时长
+        score: float | None = None,  # 可选：自动评分
+    ) -> str:
+        """记录一条 trace，返回 trace_id"""
+        trace_id = f"{datetime.now():%Y%m%d_%H%M%S}_{uuid4().hex[:8]}"
+
+        trace = {
+            "id": trace_id,
+            "agent": agent,
+            "command": command,
+            "exit_code": exit_code,
+            "duration": duration,
+            "score": score,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        # 写入 trace 元数据
+        trace_dir = self.store_dir / trace_id
+        trace_dir.mkdir()
+        json_dump(trace, trace_dir / "meta.json")
+
+        # 写入输出（可配置记录粒度）
+        if self.config.record_stdout:
+            (trace_dir / "stdout.txt").write_text(stdout)
+        if self.config.record_stderr:
+            (trace_dir / "stderr.txt").write_text(stderr)
+
+        return trace_id
+
+    def get_recent(self, n: int = 50) -> list[TraceRecord]:
+        """获取最近 N 条 trace"""
+        ...
+
+    def get_scores(self, window: int = 20) -> list[float]:
+        """获取滑动窗口内的分数序列"""
+        ...
+```
+
+### 11.3 `ph wrap` — 透明 Agent 包装器
+
+```python
+# 伪代码：wrap 命令核心逻辑
+
+def wrap(agent_cmd: str, args: list[str], workspace: str | None):
+    """透明包装 Agent 调用 — 用户无感知"""
+
+    collector = Collector()
+
+    # 1. 透明转发 — Agent 正常执行
+    full_cmd = [agent_cmd, *args]
+    start = time.monotonic()
+    proc = subprocess.run(full_cmd, capture_output=True, text=True)
+    duration = time.monotonic() - start
+
+    # 2. 输出原始结果给用户（零延迟感知）
+    sys.stdout.write(proc.stdout)
+    sys.stderr.write(proc.stderr)
+
+    # 3. 后台记录 trace
+    score = None
+    if workspace:
+        # 可选：运行 evaluate.py 对本次结果自动评分
+        score = auto_evaluate(workspace, proc.stdout)
+
+    collector.record(
+        agent=agent_cmd,
+        command=full_cmd,
+        stdin=None,
+        stdout=proc.stdout,
+        stderr=proc.stderr,
+        exit_code=proc.returncode,
+        duration=duration,
+        score=score,
+    )
+
+    # 4. 检查是否需要触发进化（轻量检查，<1ms）
+    trigger = EvolutionTrigger(collector)
+    if trigger.should_evolve():
+        console.print(
+            "[yellow]PolyHarness: Performance degradation detected. "
+            "Run 'ph evolve' to optimize.[/yellow]"
+        )
+
+    sys.exit(proc.returncode)
+```
+
+关键设计约束：
+- **零延迟**：先输出 Agent 结果，再异步记录 trace
+- **零侵入**：不修改 Agent 源码，只包装 CLI 调用
+- **可选评分**：有 workspace 时自动评分，无 workspace 时只记录 raw 数据
+
+### 11.4 Evolution Trigger（进化触发器）
+
+```python
+# 伪代码：trigger.py
+
+class EvolutionTrigger:
+    """进化触发决策引擎"""
+
+    def __init__(self, collector: Collector, config: EvolutionConfig):
+        self.collector = collector
+        self.config = config
+
+    def should_evolve(self) -> bool:
+        """判断是否应触发一轮进化搜索"""
+        strategy = self.config.trigger.strategy
+
+        if strategy == "degradation":
+            return self._check_degradation()
+        elif strategy == "accumulate":
+            return self._check_accumulation()
+        elif strategy == "cron":
+            return self._check_cron()
+        elif strategy == "manual":
+            return False  # 只有用户 ph evolve 才触发
+        return False
+
+    def _check_degradation(self) -> bool:
+        """滑动窗口退化检测"""
+        scores = self.collector.get_scores(
+            window=self.config.trigger.window_size
+        )
+        if len(scores) < self.config.trigger.min_samples:
+            return False
+
+        recent_mean = mean(scores[-self.config.trigger.window_size:])
+        best_mean = self.collector.best_historical_mean()
+
+        return (recent_mean - best_mean) < self.config.trigger.threshold
+
+    def _check_accumulation(self) -> bool:
+        """累积触发"""
+        since_last = self.collector.count_since_last_evolution()
+        return since_last >= self.config.trigger.accumulate_count
+```
+
+### 11.5 `ph evolve` — 在线进化执行
+
+```python
+# 伪代码：evolve 命令
+
+def evolve(workspace: str):
+    """基于收集的 trace 触发在线进化"""
+
+    collector = Collector()
+    ws = Workspace(workspace)
+
+    # 1. 从 traces 构建评估任务集
+    recent_traces = collector.get_recent(n=50)
+    task_cases = build_task_cases_from_traces(recent_traces)
+
+    # 2. 将任务集写入 workspace
+    ws.update_tasks(task_cases)
+
+    # 3. 启动小规模搜索（复用现有 Orchestrator）
+    config = ws.load_config()
+    config.search.max_iterations = config.evolution.max_iterations  # 默认 3
+    config.search.early_stop_patience = 2
+
+    orchestrator = Orchestrator(workspace=ws, config=config)
+    result = orchestrator.run()
+
+    # 4. 通知用户
+    if result.best_score > collector.current_score():
+        console.print(
+            f"[green]Evolution complete: "
+            f"score {collector.current_score():.4f} → {result.best_score:.4f}[/green]"
+        )
+        console.print("Run 'ph apply' to use the improved harness.")
+    else:
+        console.print("[yellow]No improvement found in this evolution cycle.[/yellow]")
+```
+
+### 11.6 全局 Trace 存储规范
+
+```
+~/.polyharness/
+├── config.yaml              # 全局配置（evolution 默认参数）
+├── traces/                  # 所有收集到的 trace
+│   ├── 20260408_143022_a1b2c3d4/
+│   │   ├── meta.json        # agent, command, score, timestamp, duration
+│   │   ├── stdout.txt       # Agent 输出（可选）
+│   │   └── stderr.txt       # 错误输出（可选）
+│   ├── 20260408_150115_e5f6g7h8/
+│   │   └── ...
+│   └── ...
+├── evolution_log.jsonl      # 进化历史（每次 ph evolve 的记录）
+└── workspaces/              # 符号链接到各项目的 workspace
+    ├── my-classifier -> /path/to/project/.ph_workspace
+    └── my-api -> /path/to/api-project/.ph_workspace
+```
+
+### 11.7 与 v0.1.x Orchestrator 的关系
+
+在线进化**复用**现有 Orchestrator，不重写搜索循环。区别仅在于数据来源和触发方式：
+
+| 方面 | v0.1.x `ph run` | v0.2.0 `ph evolve` |
+|------|-----------------|---------------------|
+| **触发** | 用户手动 | Trigger 自动 / `ph evolve` 手动 |
+| **任务来源** | `tasks/test_cases.json`（预定义） | Collector 从 traces 动态构建 |
+| **搜索规模** | 5-50 轮 | 1-3 轮（轻量） |
+| **评估数据** | 静态任务集 | 真实使用记录 |
+| **频率** | 按需（不定期） | 持续（每天/每周自动） |
+| **Orchestrator** | `Orchestrator.run()` | 同一个 `Orchestrator.run()`，只是配置不同 |
