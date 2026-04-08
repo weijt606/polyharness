@@ -259,7 +259,7 @@ ph export ./my-optimized       # 或导出到任意目录
 ph clean --keep-best           # 清理候选目录释放磁盘空间
 ```
 
-### 6. 在线进化 —— 让 agent 在你工作的同时持续改进
+### 6. 自动进化
 
 步骤 1–5 运行的是**批量**优化循环。但你也可以让 PolyHarness 从你**日常使用 agent 的过程**中收集数据，并自动触发进化。
 
@@ -664,32 +664,40 @@ ph run --max-iterations 5
 ## 项目结构
 
 ```
-src/polyharness/
-├── cli.py                   # Click CLI —— 22 个命令/子命令
-├── config.py                # Pydantic 配置模型（+ EvolutionConfig）
-├── collector.py             # 在线进化 trace 收集器
-├── orchestrator.py          # Meta-Harness 搜索循环 + 进度条 + 错误恢复
-├── workspace.py             # 文件系统 workspace + agent 指令注入
-├── search_log.py            # JSONL 追加式搜索日志
-├── doctor.py                # 所有后端的环境检测
-├── evaluator/
-│   └── evaluator.py         # PythonEvaluator（子进程）
-├── proposer/
-│   ├── api_proposer.py      # Anthropic API 直连 + tool-use 循环
-│   ├── openai_proposer.py   # OpenAI 兼容 API（Ollama、vLLM 等）
-│   ├── cli_proposer.py      # CLIProposer —— 统一子进程管理
-│   ├── local_proposer.py    # 离线规则引擎（5 种任务类型）
-│   └── adapters/            # 逐 agent CLI 适配器
-│       ├── claude_code.py   # claude -p
-│       ├── claw_code.py     # claw -p
-│       ├── codex.py         # codex --quiet --auto-edit
-│       └── opencode.py      # opencode -p
-
-bin/
-├── ph.mjs                   # npm 包装器
-└── postinstall.mjs          # npm postinstall
-
-tests/                       # 165 个测试（pytest）
+polyharness/
+├── src/polyharness/
+│   ├── cli.py                   # Click CLI —— 22 个命令/子命令
+│   ├── config.py                # Pydantic 配置模型（+ EvolutionConfig）
+│   ├── collector.py             # 在线进化 trace 收集器
+│   ├── orchestrator.py          # Meta-Harness 搜索循环 + 进度条 + 错误恢复
+│   ├── workspace.py             # 文件系统 workspace + agent 指令注入
+│   ├── search_log.py            # JSONL 追加式搜索日志
+│   ├── doctor.py                # 所有后端的环境检测
+│   ├── evaluator/
+│   │   └── evaluator.py         # PythonEvaluator（子进程）
+│   ├── proposer/
+│   │   ├── api_proposer.py      # Anthropic API 直连 + tool-use 循环
+│   │   ├── openai_proposer.py   # OpenAI 兼容 API（Ollama、vLLM 等）
+│   │   ├── cli_proposer.py      # CLIProposer —— 统一子进程管理
+│   │   ├── local_proposer.py    # 离线规则引擎（5 种任务类型）
+│   │   └── adapters/            # 逐 agent CLI 适配器
+│   │       ├── claude_code.py   # claude -p
+│   │       ├── claw_code.py     # claw -p
+│   │       ├── codex.py         # codex --quiet --auto-edit
+│   │       └── opencode.py      # opencode -p
+│   └── templates/               # 5 个内置任务模板
+│       ├── text-classification/
+│       ├── math-word-problems/
+│       ├── code-generation/
+│       ├── rag-qa/
+│       └── api-calling/
+├── tests/                       # 165 个测试（pytest）
+├── bin/                         # npm 包装器（ph.mjs、postinstall.mjs）
+├── docs/
+│   ├── development/             # 产品路线图 & 技术架构
+│   └── research/references/     # Meta-Harness 论文
+├── pyproject.toml               # Python 包配置
+└── package.json                 # npm 包配置
 ```
 
 ## 本地开发

@@ -259,7 +259,7 @@ ph export ./my-optimized       # or export to any directory
 ph clean --keep-best           # remove candidates to free disk space
 ```
 
-### 6. Online evolution — let your agent improve while you work
+### 6. Auto-Evolution
 
 Steps 1–5 run a **batch** optimization loop. But you can also let PolyHarness collect data from your **daily agent usage** and trigger evolution automatically.
 
@@ -664,32 +664,40 @@ ph run --max-iterations 5
 ## Project Structure
 
 ```
-src/polyharness/
-├── cli.py                   # Click CLI — 22 commands/subcommands
-├── config.py                # Pydantic config models (+ EvolutionConfig)
-├── collector.py             # Trace collector for online evolution
-├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery
-├── workspace.py             # Filesystem workspace + agent instruction injection
-├── search_log.py            # JSONL append-only search log
-├── doctor.py                # Environment detection for all backends
-├── evaluator/
-│   └── evaluator.py         # PythonEvaluator (subprocess)
-├── proposer/
-│   ├── api_proposer.py      # Anthropic API direct + tool-use loop
-│   ├── openai_proposer.py   # OpenAI-compatible API (Ollama, vLLM, etc.)
-│   ├── cli_proposer.py      # CLIProposer — unified subprocess management
-│   ├── local_proposer.py    # Offline rule-based (5 task types)
-│   └── adapters/            # Per-agent CLI adapters
-│       ├── claude_code.py   # claude -p
-│       ├── claw_code.py     # claw -p
-│       ├── codex.py         # codex --quiet --auto-edit
-│       └── opencode.py      # opencode -p
-
-bin/
-├── ph.mjs                   # npm wrapper
-└── postinstall.mjs          # npm postinstall
-
-tests/                       # 165 tests (pytest)
+polyharness/
+├── src/polyharness/
+│   ├── cli.py                   # Click CLI — 22 commands/subcommands
+│   ├── config.py                # Pydantic config models (+ EvolutionConfig)
+│   ├── collector.py             # Trace collector for online evolution
+│   ├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery
+│   ├── workspace.py             # Filesystem workspace + agent instruction injection
+│   ├── search_log.py            # JSONL append-only search log
+│   ├── doctor.py                # Environment detection for all backends
+│   ├── evaluator/
+│   │   └── evaluator.py         # PythonEvaluator (subprocess)
+│   ├── proposer/
+│   │   ├── api_proposer.py      # Anthropic API direct + tool-use loop
+│   │   ├── openai_proposer.py   # OpenAI-compatible API (Ollama, vLLM, etc.)
+│   │   ├── cli_proposer.py      # CLIProposer — unified subprocess management
+│   │   ├── local_proposer.py    # Offline rule-based (5 task types)
+│   │   └── adapters/            # Per-agent CLI adapters
+│   │       ├── claude_code.py   # claude -p
+│   │       ├── claw_code.py     # claw -p
+│   │       ├── codex.py         # codex --quiet --auto-edit
+│   │       └── opencode.py      # opencode -p
+│   └── templates/               # 5 built-in task templates
+│       ├── text-classification/
+│       ├── math-word-problems/
+│       ├── code-generation/
+│       ├── rag-qa/
+│       └── api-calling/
+├── tests/                       # 165 tests (pytest)
+├── bin/                         # npm wrapper (ph.mjs, postinstall.mjs)
+├── docs/
+│   ├── development/             # Product roadmap & technical architecture
+│   └── research/references/     # Meta-Harness paper
+├── pyproject.toml               # Python package config
+└── package.json                 # npm package config
 ```
 
 ## Local Development
