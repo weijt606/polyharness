@@ -272,13 +272,11 @@ ph wrap --auto-evolve claw -p "给支付服务写集成测试"            # Claw
 ph wrap --auto-evolve codex "给 API 客户端加上重试逻辑"              # Codex
 ph wrap --auto-evolve opencode -p "修复不稳定的 parser 测试"       # OpenCode
 
-# API 后端 —— 包裹任何调用模型的脚本
-ph wrap --auto-evolve python my_agent.py --task "分类这些评论"  # 你自己的脚本（api / openai）
-
-# 本地模型（Ollama、vLLM 等）—— 同样的方式，包裹调用模型的命令
-ph wrap --auto-evolve ollama run gemma3 "总结这篇文档"                # Ollama CLI
-ph wrap --auto-evolve python infer.py --model local --input data.json  # 自定义本地推理脚本
+# 本地模型 —— 直接包裹 CLI 命令
+ph wrap --auto-evolve ollama run gemma3 "总结这篇文档"                # Ollama
 ```
+
+> **注意：** API 后端（DeepSeek、OpenAI 等）请使用步骤 1–5 的批量工作流：`ph init --agent openai`。
 
 这会发生什么：
 1. Agent 输出**原样透传**，你的工作流不会改变。

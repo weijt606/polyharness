@@ -272,13 +272,11 @@ ph wrap --auto-evolve claw -p "Write integration tests for payments"     # Claw 
 ph wrap --auto-evolve codex "Add retry logic to the API client"          # Codex
 ph wrap --auto-evolve opencode -p "Fix the flaky parser test"            # OpenCode
 
-# API backends — wrap any script that calls a model
-ph wrap --auto-evolve python my_agent.py --task "Classify these reviews"  # Your own script (api / openai)
-
-# Local models (Ollama, vLLM, etc.) — same idea, wrap the command that calls the model
-ph wrap --auto-evolve ollama run gemma3 "Summarize this document"         # Ollama CLI
-ph wrap --auto-evolve python infer.py --model local --input data.json    # Custom local inference script
+# Local models — wrap the CLI command directly
+ph wrap --auto-evolve ollama run gemma3 "Summarize this document"         # Ollama
 ```
+
+> **Note:** For API backends (DeepSeek, OpenAI, etc.), use the batch workflow in Steps 1–5 with `ph init --agent openai` instead.
 
 What happens:
 1. Agent output **passes through transparently** — your workflow doesn't change.
