@@ -263,12 +263,17 @@ ph clean --keep-best           # remove candidates to free disk space
 
 Steps 1–5 run a **batch** optimization loop. But you can also let PolyHarness collect data from your **daily agent usage** and trigger evolution automatically.
 
-Just add `ph wrap --auto-evolve` in front of your agent command:
+Just add `ph wrap --auto-evolve` in front of your agent command (pick the one matching your setup):
 
 ```bash
-ph wrap --auto-evolve claude -p "Refactor the auth module to use JWT"
-ph wrap --auto-evolve codex "Add retry logic to the API client"
-ph wrap --auto-evolve claw -p "Write integration tests for the payment service"
+# CLI agent backends — wrap the agent you already use
+ph wrap --auto-evolve claude -p "Refactor the auth module to use JWT"   # Claude Code
+ph wrap --auto-evolve claw -p "Write integration tests for payments"     # Claw Code
+ph wrap --auto-evolve codex "Add retry logic to the API client"          # Codex
+ph wrap --auto-evolve opencode -p "Fix the flaky parser test"            # OpenCode
+
+# API backends — wrap any script that calls a model
+ph wrap --auto-evolve python my_agent.py --task "Classify these reviews"  # Your own script (api / openai)
 ```
 
 What happens:

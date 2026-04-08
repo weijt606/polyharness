@@ -263,12 +263,17 @@ ph clean --keep-best           # 清理候选目录释放磁盘空间
 
 步骤 1–5 运行的是**批量**优化循环。但你也可以让 PolyHarness 从你**日常使用 agent 的过程**中收集数据，并自动触发进化。
 
-只需在 agent 命令前加上 `ph wrap --auto-evolve`：
+只需在 agent 命令前加上 `ph wrap --auto-evolve`（选择你正在使用的那一种）：
 
 ```bash
-ph wrap --auto-evolve claude -p "把 auth 模块重构为 JWT 方案"
-ph wrap --auto-evolve codex "给 API 客户端加上重试逻辑"
-ph wrap --auto-evolve claw -p "给支付服务写集成测试"
+# CLI agent 后端 —— 直接包裹你已经在用的 agent
+ph wrap --auto-evolve claude -p "把 auth 模块重构为 JWT 方案"      # Claude Code
+ph wrap --auto-evolve claw -p "给支付服务写集成测试"            # Claw Code
+ph wrap --auto-evolve codex "给 API 客户端加上重试逻辑"              # Codex
+ph wrap --auto-evolve opencode -p "修复不稳定的 parser 测试"       # OpenCode
+
+# API 后端 —— 包裹任何调用模型的脚本
+ph wrap --auto-evolve python my_agent.py --task "分类这些评论"  # 你自己的脚本（api / openai）
 ```
 
 这会发生什么：
