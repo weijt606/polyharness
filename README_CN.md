@@ -261,51 +261,64 @@ ph clean --keep-best           # 清理候选目录释放磁盘空间
 
 ### 6. 在线进化 —— 让 agent 在你工作的同时持续改进
 
-步骤 1–5 运行的是**批量**优化循环。但你也可以让 PolyHarness 从你**日常使用 agent 的过程**中收集数据，并自动触发进化循环。
+步骤 1–5 运行的是**批量**优化循环。但你也可以让 PolyHarness 从你**日常使用 agent 的过程**中收集数据，并自动触发进化。
 
-#### 步骤 A：包裹你的 agent
-
-在任何 agent 命令前加上 `ph wrap`。输出原样透传，你的工作流不会改变。
+只需在 agent 命令前加上 `ph wrap --auto-evolve`：
 
 ```bash
-# 正常使用 agent，只是在前面加上 "ph wrap"
-ph wrap claude -p "把 auth 模块重构为 JWT 方案"
-ph wrap codex "给 API 客户端加上重试逻辑"
-ph wrap claw -p "给支付服务写集成测试"
+ph wrap --auto-evolve claude -p "把 auth 模块重构为 JWT 方案"
+ph wrap --auto-evolve codex "给 API 客户端加上重试逻辑"
+ph wrap --auto-evolve claw -p "给支付服务写集成测试"
 ```
 
-每次调用都会记录一条 **trace**：agent 名称、命令、退出码、耗时，以及（可选的）stdout/stderr。Traces 存储在 `~/.polyharness/traces/`。
+这会发生什么：
+1. Agent 输出**原样透传**，你的工作流不会改变。
+2. 每次调用记录一条 **trace**（agent、命令、退出码、耗时、输出）到 `~/.polyharness/traces/`。
+3. 当 trace 数量达到阈值（默认 50，可配置）时，**PolyHarness 自动触发一轮轻量进化循环**，无需手动干预。
 
-#### 步骤 B：查看已收集的 traces
+阈值未达到时，你会看到一行安静的进度提示：
+```
+PolyHarness: trace recorded (20260408_143012_a1b2c3d4)
+PolyHarness: 7/50 traces until next evolution
+```
+
+当阈值触发时：
+```
+PolyHarness: 50 traces collected — triggering auto-evolution...
+───────── PolyHarness Online Evolution ─────────
+...
+Auto-evolution complete: best score 0.8700 at iter_2
+Run ph apply to use the improved harness.
+```
+
+#### 配置
+
+在 workspace 的 `config.yaml` 中调整触发阈值：
+
+```yaml
+evolution:
+  trigger:
+    strategy: accumulate
+    accumulate_count: 10    # 每 10 条 trace 触发一次（默认：50）
+  max_iterations: 3         # 每轮进化的迭代次数
+  auto_apply: false         # 设为 true 自动应用（谨慎使用）
+```
+
+#### 手动控制
+
+你也可以随时手动管理 traces 并触发进化：
 
 ```bash
 ph traces list                 # 最近 traces 表格
 ph traces stats                # 汇总：总数、已评分、各 agent 分布
 ph traces show <trace-id>      # 完整详情 + 捕获的输出
+ph traces clear --keep 100     # 清理旧 traces
+ph evolve                      # 手动触发进化
 ```
 
-#### 步骤 C：触发进化循环
+> **提示：** 如果不想保存 stdout/stderr（例如敏感输出），使用 `--no-record-output`。元数据始终会记录。
 
-当 traces 积累到足够多时，运行 `ph evolve` 启动一轮以真实使用模式为上下文的轻量搜索循环：
-
-```bash
-ph evolve --workspace .ph_workspace
-```
-
-这会运行与 `ph run` 相同的编排器搜索循环，但限制在少量迭代内（默认 3 轮）。它读取你的 traces 来理解 agent 的实际使用方式，然后搜索 harness 改进方案。
-
-```bash
-# 完整的日常工作流示例
-ph wrap claude -p "修复 test_parser.py 中的不稳定测试"    # 正常工作
-ph wrap claude -p "给 /users 接口添加分页功能"           # traces 持续积累
-ph traces stats                                         # 看看：数据够了吗？
-ph evolve --workspace .ph_workspace                     # 进化！
-ph apply                                                # 如果有改进就应用
-```
-
-> **提示：** 如果不想保存 stdout/stderr（例如敏感输出），使用 `ph wrap --no-record-output`。元数据（耗时、退出码）总是会记录。
-
-> **提示：** 定期运行 `ph traces clear --keep 100` 清理旧 traces，保持存储精简。
+> **提示：** 可以设置 shell alias 进一步简化输入：`alias cc="ph wrap --auto-evolve claude"`
 
 ### 立即体验（无需 API key）
 
@@ -571,6 +584,7 @@ python -m polyharness --version
 --workspace PATH     将 trace 关联到指定 workspace
 --store PATH         自定义 trace 存储目录
 --no-record-output   不捕获 stdout/stderr（仅记录元数据）
+--auto-evolve        traces 积累足够时自动触发进化
 ```
 
 ### `ph evolve` 选项

@@ -261,51 +261,64 @@ ph clean --keep-best           # remove candidates to free disk space
 
 ### 6. Online evolution — let your agent improve while you work
 
-Steps 1–5 run a **batch** optimization loop. But you can also let PolyHarness collect data from your **daily agent usage** and trigger evolution cycles automatically.
+Steps 1–5 run a **batch** optimization loop. But you can also let PolyHarness collect data from your **daily agent usage** and trigger evolution automatically.
 
-#### Step A: Wrap your agent
-
-Prefix any agent command with `ph wrap`. Output passes through transparently — your workflow doesn't change.
+Just add `ph wrap --auto-evolve` in front of your agent command:
 
 ```bash
-# Use your agent normally, just add "ph wrap" in front
-ph wrap claude -p "Refactor the auth module to use JWT"
-ph wrap codex "Add retry logic to the API client"
-ph wrap claw -p "Write integration tests for the payment service"
+ph wrap --auto-evolve claude -p "Refactor the auth module to use JWT"
+ph wrap --auto-evolve codex "Add retry logic to the API client"
+ph wrap --auto-evolve claw -p "Write integration tests for the payment service"
 ```
 
-Each invocation records a **trace**: agent name, command, exit code, duration, and (optionally) stdout/stderr. Traces are stored in `~/.polyharness/traces/`.
+What happens:
+1. Agent output **passes through transparently** — your workflow doesn't change.
+2. Each invocation records a **trace** (agent, command, exit code, duration, output) in `~/.polyharness/traces/`.
+3. When the trace count reaches the threshold (default 50, configurable), **PolyHarness auto-triggers a lightweight evolution cycle** — no manual intervention needed.
 
-#### Step B: Review collected traces
+Before the threshold is reached, you'll see a quiet progress hint:
+```
+PolyHarness: trace recorded (20260408_143012_a1b2c3d4)
+PolyHarness: 7/50 traces until next evolution
+```
+
+When the threshold is hit:
+```
+PolyHarness: 50 traces collected — triggering auto-evolution...
+───────── PolyHarness Online Evolution ─────────
+...
+Auto-evolution complete: best score 0.8700 at iter_2
+Run ph apply to use the improved harness.
+```
+
+#### Configuration
+
+Tune the trigger threshold in your workspace `config.yaml`:
+
+```yaml
+evolution:
+  trigger:
+    strategy: accumulate
+    accumulate_count: 10    # trigger every 10 traces (default: 50)
+  max_iterations: 3         # iterations per evolution cycle
+  auto_apply: false         # set true to auto-apply (use with caution)
+```
+
+#### Manual control
+
+You can also manage traces and trigger evolution manually at any time:
 
 ```bash
 ph traces list                 # table of recent traces
 ph traces stats                # summary: total, scored, per-agent breakdown
 ph traces show <trace-id>      # full detail + captured output
+ph traces clear --keep 100     # prune old traces
+ph evolve                      # trigger evolution manually
 ```
 
-#### Step C: Trigger an evolution cycle
+> **Tip:** Use `--no-record-output` if you don't want stdout/stderr saved (e.g., for sensitive output). Metadata is always recorded.
 
-Once enough traces have accumulated, run `ph evolve` to kick off a lightweight search loop that uses real usage patterns as context:
-
-```bash
-ph evolve --workspace .ph_workspace
-```
-
-This runs the same Orchestrator search loop as `ph run`, but scoped to a small number of iterations (default 3). It reads your traces to understand how the agent is actually being used, then searches for harness improvements.
-
-```bash
-# Full daily workflow example
-ph wrap claude -p "Fix the flaky test in test_parser.py"   # work normally
-ph wrap claude -p "Add pagination to the /users endpoint"  # traces accumulate
-ph traces stats                                            # check: enough data?
-ph evolve --workspace .ph_workspace                        # evolve!
-ph apply                                                   # apply if improved
-```
-
-> **Tip:** Use `ph wrap --no-record-output` if you don't want stdout/stderr saved (e.g., for sensitive output). Metadata (duration, exit code) is always recorded.
-
-> **Tip:** Run `ph traces clear --keep 100` periodically to prune old traces and keep the store lean.
+> **Tip:** Create a shell alias for even less typing: `alias cc="ph wrap --auto-evolve claude"`
 
 ### Try it now (no API key needed)
 
@@ -571,6 +584,7 @@ python -m polyharness --version
 --workspace PATH     Associate trace with a workspace
 --store PATH         Custom trace store directory
 --no-record-output   Don't capture stdout/stderr (record metadata only)
+--auto-evolve        Auto-trigger evolution when enough traces accumulate
 ```
 
 ### `ph evolve` options

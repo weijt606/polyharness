@@ -69,6 +69,92 @@ class TestWrap:
         )
         assert result.exit_code == 127
 
+    def test_wrap_auto_evolve_flag_accepted(self, runner: CliRunner, store_dir: Path):
+        result = runner.invoke(
+            main,
+            ["wrap", "--store", str(store_dir), "--auto-evolve", "echo", "hi"],
+        )
+        assert "hi" in result.output
+        assert "trace recorded" in result.output
+
+    def test_wrap_auto_evolve_skips_without_workspace(
+        self, runner: CliRunner, store_dir: Path, tmp_path: Path, monkeypatch
+    ):
+        """auto-evolve silently skips when no .ph_workspace exists."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(
+            main,
+            ["wrap", "--store", str(store_dir), "--auto-evolve", "echo", "test"],
+        )
+        assert "trace recorded" in result.output
+        # Should NOT crash or mention evolution
+        assert "triggering auto-evolution" not in result.output
+
+    def test_wrap_auto_evolve_shows_progress(
+        self, runner: CliRunner, store_dir: Path, tmp_path: Path
+    ):
+        """auto-evolve shows N/threshold progress when below threshold."""
+        from polyharness.workspace import Workspace
+
+        ws = Workspace.init(tmp_path / "ws", agent_backend="local")
+        # Set accumulate_count=5, so 1 trace won't trigger
+        import yaml
+
+        config_path = ws.root / "config.yaml"
+        cfg = yaml.safe_load(config_path.read_text())
+        cfg["evolution"] = {"trigger": {"strategy": "accumulate", "accumulate_count": 5}}
+        config_path.write_text(yaml.dump(cfg))
+
+        result = runner.invoke(
+            main,
+            [
+                "wrap",
+                "--store", str(store_dir),
+                "--auto-evolve",
+                "--workspace", str(ws.root),
+                "echo", "test",
+            ],
+        )
+        assert "1/5" in result.output
+
+    def test_wrap_auto_evolve_triggers_when_threshold_met(
+        self, runner: CliRunner, store_dir: Path, tmp_path: Path
+    ):
+        """auto-evolve triggers evolution when enough traces accumulate."""
+        from polyharness.workspace import Workspace
+
+        ws = Workspace.init(tmp_path / "ws", agent_backend="local")
+        import yaml
+
+        config_path = ws.root / "config.yaml"
+        cfg = yaml.safe_load(config_path.read_text())
+        cfg["evolution"] = {"trigger": {"strategy": "accumulate", "accumulate_count": 2}}
+        config_path.write_text(yaml.dump(cfg))
+
+        # Record 1st trace — should not trigger
+        runner.invoke(
+            main,
+            [
+                "wrap",
+                "--store", str(store_dir),
+                "--auto-evolve",
+                "--workspace", str(ws.root),
+                "echo", "first",
+            ],
+        )
+        # Record 2nd trace — should trigger
+        result = runner.invoke(
+            main,
+            [
+                "wrap",
+                "--store", str(store_dir),
+                "--auto-evolve",
+                "--workspace", str(ws.root),
+                "echo", "second",
+            ],
+        )
+        assert "triggering auto-evolution" in result.output.lower()
+
 
 # ---------------------------------------------------------------------------
 # ph traces

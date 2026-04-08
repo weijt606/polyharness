@@ -1416,7 +1416,19 @@ def uninstall(yes: bool):
 )
 @click.option("--store", type=click.Path(), default=None, help="Trace store directory.")
 @click.option("--no-record-output", is_flag=True, help="Skip recording stdout/stderr.")
-def wrap(agent_cmd: str, agent_args: tuple[str, ...], workspace: str | None, store: str | None, no_record_output: bool):
+@click.option(
+    "--auto-evolve",
+    is_flag=True,
+    help="Auto-trigger evolution when enough traces accumulate.",
+)
+def wrap(
+    agent_cmd: str,
+    agent_args: tuple[str, ...],
+    workspace: str | None,
+    store: str | None,
+    no_record_output: bool,
+    auto_evolve: bool,
+):
     """Wrap an Agent CLI call — transparent forwarding + trace collection.
 
     Usage:  ph wrap claude-code "fix the bug in auth.py"
@@ -1465,7 +1477,94 @@ def wrap(agent_cmd: str, agent_args: tuple[str, ...], workspace: str | None, sto
             highlight=False,
         )
 
+    # Auto-evolve: check trigger condition and run evolution if met
+    if auto_evolve:
+        _try_auto_evolve(workspace=workspace, store=store, collector=collector)
+
     sys.exit(proc.returncode)
+
+
+def _try_auto_evolve(
+    *,
+    workspace: str | None,
+    store: str | None,
+    collector: object,
+) -> None:
+    """Check trigger condition and run a background evolution cycle if met."""
+    from pathlib import Path
+
+    from polyharness.collector import Collector
+    from polyharness.config import PolyHarnessConfig
+
+    assert isinstance(collector, Collector)
+
+    # Resolve workspace — explicit flag > .ph_workspace in cwd
+    ws_path = Path(workspace).resolve() if workspace else Path.cwd() / ".ph_workspace"
+    config_path = ws_path / "config.yaml"
+    if not config_path.exists():
+        # No workspace to evolve against — silently skip
+        return
+
+    config = PolyHarnessConfig.from_yaml(config_path)
+    trigger = config.evolution.trigger
+
+    # Check accumulate_count threshold
+    pending = collector.count_since_last_evolution()
+    threshold = trigger.accumulate_count
+    if pending < threshold:
+        if not console.quiet:
+            console.print(
+                f"[dim]PolyHarness: {pending}/{threshold} traces until next evolution[/dim]",
+                highlight=False,
+            )
+        return
+
+    # Trigger! Run evolution inline (lightweight — default 3 iterations)
+    console.print(
+        f"\n[bold blue]PolyHarness: {pending} traces collected — triggering auto-evolution...[/bold blue]"
+    )
+
+    from polyharness.orchestrator import Orchestrator
+    from polyharness.workspace import Workspace
+
+    ws = Workspace(ws_path)
+    evo_max = config.evolution.max_iterations
+    config.search.max_iterations = evo_max
+    config.search.early_stop_patience = min(2, evo_max)
+
+    orchestrator = Orchestrator(workspace=ws, config=config)
+    result = orchestrator.run(resume=True)
+
+    # Log the evolution
+    import json
+    from datetime import datetime, timezone
+
+    evo_log = collector.store_dir.parent / "evolution_log.jsonl"
+    evo_log.parent.mkdir(parents=True, exist_ok=True)
+    with open(evo_log, "a") as f:
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "workspace": str(ws.root),
+            "traces_available": pending,
+            "best_iteration": result.best_iteration,
+            "best_score": result.best_score,
+            "total_iterations": result.total_iterations,
+            "auto": True,
+        }
+        f.write(json.dumps(entry) + "\n")
+
+    if result.best_score > 0 and result.best_iteration > 0:
+        console.print(
+            f"[green]Auto-evolution complete: best score {result.best_score:.4f} "
+            f"at iter_{result.best_iteration}[/green]"
+        )
+        if config.evolution.auto_apply:
+            console.print("[bold]Auto-applying improved harness...[/bold]")
+            ws.apply_best()
+        else:
+            console.print("Run [bold]ph apply[/bold] to use the improved harness.")
+    else:
+        console.print("[yellow]Auto-evolution: no improvement found.[/yellow]")
 
 
 @main.group()
