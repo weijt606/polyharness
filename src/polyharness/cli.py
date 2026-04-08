@@ -1560,7 +1560,7 @@ def _try_auto_evolve(
         )
         if config.evolution.auto_apply:
             console.print("[bold]Auto-applying improved harness...[/bold]")
-            ws.apply_best()
+            ws.apply_best(ws.base_harness_dir)
         else:
             console.print("Run [bold]ph apply[/bold] to use the improved harness.")
     else:
