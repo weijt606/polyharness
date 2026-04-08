@@ -3,8 +3,8 @@
 This is intentionally naive to give the Proposer room to improve.
 """
 
-import sys
 import json
+import sys
 
 
 def classify(text: str) -> str:

@@ -4,9 +4,10 @@ import json
 import sys
 from pathlib import Path
 
-# Example directories
-EXAMPLE_DIR = Path(__file__).parent.parent / "examples" / "text-classification"
-MATH_EXAMPLE_DIR = Path(__file__).parent.parent / "examples" / "math-word-problems"
+# Template directories (bundled inside the package)
+TEMPLATE_BASE = Path(__file__).parent.parent / "src" / "polyharness" / "templates"
+EXAMPLE_DIR = TEMPLATE_BASE / "text-classification"
+MATH_EXAMPLE_DIR = TEMPLATE_BASE / "math-word-problems"
 
 
 def test_base_harness_classify():
@@ -80,7 +81,7 @@ def test_math_evaluate_script():
 
 # --- Code generation example ---
 
-CODEGEN_EXAMPLE_DIR = Path(__file__).parent.parent / "examples" / "code-generation"
+CODEGEN_EXAMPLE_DIR = TEMPLATE_BASE / "code-generation"
 
 
 def test_codegen_base_harness_generate():
@@ -116,7 +117,7 @@ def test_codegen_evaluate_script():
 
 # --- API-calling example ---
 
-API_EXAMPLE_DIR = Path(__file__).parent.parent / "examples" / "api-calling"
+API_EXAMPLE_DIR = TEMPLATE_BASE / "api-calling"
 
 
 def test_api_base_harness_route():
@@ -154,7 +155,7 @@ def test_api_evaluate_script():
 
 # --- RAG-QA example ---
 
-RAG_EXAMPLE_DIR = Path(__file__).parent.parent / "examples" / "rag-qa"
+RAG_EXAMPLE_DIR = TEMPLATE_BASE / "rag-qa"
 
 
 def test_rag_base_harness_retrieve():

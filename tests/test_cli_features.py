@@ -449,3 +449,49 @@ def test_report_custom_output(runner, workspace, tmp_path):
     assert result.exit_code == 0
     assert out_path.exists()
     assert "PolyHarness" in out_path.read_text()
+
+
+# --- ph new (scaffold) ---
+
+
+def test_new_creates_scaffold(runner, tmp_path):
+    dest = tmp_path / "my-proj"
+    result = runner.invoke(main, ["new", str(dest)])
+    assert result.exit_code == 0
+    assert (dest / "base_harness" / "harness.py").exists()
+    assert (dest / "tasks" / "test_cases.json").exists()
+    assert (dest / "evaluate.py").exists()
+    assert "Created project scaffold" in result.output
+    assert "ph init" in result.output
+
+
+def test_new_default_name(runner, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(main, ["new"])
+    assert result.exit_code == 0
+    assert (tmp_path / "my-harness" / "base_harness" / "harness.py").exists()
+
+
+def test_new_rejects_nonempty_dir(runner, tmp_path):
+    dest = tmp_path / "existing"
+    dest.mkdir()
+    (dest / "some_file.txt").write_text("occupied")
+    result = runner.invoke(main, ["new", str(dest)])
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+
+
+def test_new_scaffold_works_with_init(runner, tmp_path):
+    dest = tmp_path / "proj"
+    runner.invoke(main, ["new", str(dest)])
+    ws_dir = tmp_path / "ws"
+    result = runner.invoke(main, [
+        "init", "--agent", "api",
+        "--base-harness", str(dest / "base_harness"),
+        "--task-dir", str(dest),
+        "--workspace", str(ws_dir),
+    ])
+    assert result.exit_code == 0
+    assert (ws_dir / "base_harness" / "harness.py").exists()
+    assert (ws_dir / "tasks" / "test_cases.json").exists()
+    assert (ws_dir / "evaluate.py").exists()

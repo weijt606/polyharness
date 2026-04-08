@@ -33,7 +33,7 @@ def _exec_generated(code_body: str, args):
     ``return`` to produce the result.
     """
     namespace: dict = {}
-    wrapped = f"def _generated(args):\n"
+    wrapped = "def _generated(args):\n"
     for line in code_body.splitlines():
         wrapped += f"    {line}\n"
     exec(wrapped, namespace)  # noqa: S102 — sandboxed eval of generated code

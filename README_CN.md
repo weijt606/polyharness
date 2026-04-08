@@ -75,7 +75,7 @@ PolyHarness 是一个通过迭代评估与搜索来探索 agent harness 变体�
 
 ```bash
 pip install polyharness
-ph init --agent claude-code --task-dir ./my_tasks
+ph init --agent claude-code --template text-classification
 ph run
 ph apply
 ```
@@ -131,25 +131,96 @@ ph doctor
 
 ### 3. 初始化 workspace
 
+`ph init` 设置两件事：
+
+1. **谁来优化**（`--agent`）—— 由哪个 AI 来思考：CLI 工具如 `claude-code`，或 API 如 `api` / `openai`。
+2. **优化什么**（`--template` 或 `--base-harness` + `--task-dir`）—— 你的 harness 代码、测试数据和评估脚本。`ph run` 运行时三者缺一不可。
+
+#### 方式 A：用内置模板一键初始化（推荐首次使用）
+
+PolyHarness 自带多个可直接运行的模板，一条命令搞定所有初始化：
+
+```bash
+ph init --agent api --template text-classification
+```
+
+这会自动将完整的 harness + tasks + evaluate 三件套复制到 workspace 中：
+
+```
+.ph_workspace/
+├── base_harness/
+│   └── harness.py          # 待优化的起始代码
+├── tasks/
+│   └── test_cases.json     # 测试输入 + 期望输出
+├── evaluate.py             # 评分脚本
+└── config.yaml             # 自动生成
+```
+
+就这样——直接跳到[第 4 步](#4-运行优化循环)。
+
+> 可用模板：`text-classification`、`math-word-problems`、`code-generation`、`rag-qa`、`api-calling`。
+
+#### 方式 B：使用自己的项目
+
+你需要三个文件：`harness.py`（要优化的代码）、`tasks/test_cases.json`（测试数据）、`evaluate.py`（评分脚本）。一条命令全部生成：
+
+```bash
+ph new my-project
+```
+
+生成结构：
+
+```
+my-project/
+├── base_harness/
+│   └── harness.py          # ← 编辑：你的起始逻辑
+├── tasks/
+│   └── test_cases.json     # ← 编辑：测试输入 + 期望输出
+└── evaluate.py             # ← 按需编辑：评分逻辑
+```
+
+根据你的任务编辑生成的文件。例如，如果你在做文本分类：
+
+```python
+# my-project/base_harness/harness.py
+def solve(input_data: str) -> str:
+    # 一个简单的起点——agent 会来改进它
+    if "good" in input_data.lower():
+        return "positive"
+    return "negative"
+```
+
+```json
+// my-project/tasks/test_cases.json
+[
+  {"input": "这个产品很棒", "expected": "positive"},
+  {"input": "糟糕的体验",  "expected": "negative"},
+  {"input": "会议下午三点开始", "expected": "neutral"}
+]
+```
+
+> `evaluate.py` 开箱即用——它会调用 `harness.solve(case["input"])`，与 `case["expected"]` 对比，报告准确率。只有当你的评分逻辑需要自定义时才需要修改它。
+
+然后初始化：
+
 ```bash
 ph init \
   --agent claude-code \
-  --base-harness ./my_harness/ \
-  --task-dir ./my_tasks/ \
-  --eval-script ./evaluate.py
+  --base-harness ./my-project/base_harness \
+  --task-dir ./my-project
 ```
 
-这会将原有项目代码复制到一个隔离的 **优化 Workspace** 中（默认在当前目录下创建 `.ph_workspace`，也可通过 `--workspace` 指定其他目录）。
+| 参数 | 含义 | 必需？ |
+|------|-----|:------:|
+| `--agent` | 谁来优化：`claude-code`、`codex`、`api`、`openai` 等 | 是（默认 `api`） |
+| `--base-harness` | 包含起始 harness 代码的目录（至少需要 `harness.py`） | 是* |
+| `--task-dir` | 包含 `tasks/test_cases.json` 和可选 `evaluate.py` 的目录 | 是* |
+| `--eval-script` | `evaluate.py` 路径（如果不在 `--task-dir` 内） | 仅当 task-dir 中没有时 |
+| `--workspace` | workspace 创建位置（默认 `.ph_workspace`） | 否 |
 
-#### 你需要准备什么
+\* 技术上在 `init` 时可省略，但 `ph run` 运行时若缺少 harness 代码或测试数据会报错。
 
-| 内容 | 说明 | 示例 |
-|------|-----|------|
-| **base-harness/** | 包含你的起始 harness 代码的目录，至少需要一个入口文件（默认 `harness.py`）。这就是 PolyHarness 将要迭代优化的代码。 | 一个包含 `classify(text)` 或 `solve(question)` 函数的 Python 文件 |
-| **tasks/** | 包含 `test_cases.json` 的目录——一个 JSON 数组，每项包含测试输入和期望输出，字段为 `"input"` 和 `"expected"`。 | `[{"input": "2+3", "expected": "5"}, ...]` |
-| **evaluate.py** | 评估脚本，运行 harness 处理每个任务并输出 JSON 分数。必须将 `{"overall_score": 0.85, "task_scores": {...}}` 打印到 stdout。 | 参考任意 `examples/*/evaluate.py` 获取可用模板 |
-
-> **提示：** 如果不确定格式，建议从 `examples/` 目录中复制一个完整的示例作为起点来修改。
+`ph init` 会将所有内容复制到一个隔离的 **优化 Workspace** 中——你的原始代码不会被修改。
 
 **配置你的 Agent**
 
@@ -190,14 +261,9 @@ ph clean --keep-best           # 清理候选目录释放磁盘空间
 ### 立即体验（无需 API key）
 
 ```bash
-cd examples/math-word-problems
-
-ph init --agent local \
-        --base-harness ./base_harness \
-        --task-dir . \
-        --workspace .ph_workspace
-
-ph log --workspace .ph_workspace
+ph init --agent local --template math-word-problems
+ph run --max-iterations 5
+ph log
 
 # Search Tree
 # └── iter_0  0.3500
@@ -277,10 +343,8 @@ Proposer 在生成下一个候选之前会读取**所有这些信息**。它能�
 如果你在本地运行模型（Ollama、vLLM、LM Studio 或任何 OpenAI 兼容服务），使用 `openai` 后端：
 
 ```bash
-# 1. 初始化
-ph init --agent openai \
-  --base-harness ./my_harness/ \
-  --task-dir ./my_tasks/
+# 1. 初始化（用模板，或用 --base-harness + --task-dir 指向自己的项目）
+ph init --agent openai --template text-classification
 
 # 2. 配置本地 endpoint
 ph config set proposer.model llama3.3
@@ -388,6 +452,7 @@ python -m polyharness --version
 | 命令 | 说明 |
 |------|------|
 | `ph doctor` | 检测已安装的 agent 和环境状态 |
+| `ph new [目录]` | 生成 harness 项目脚手架（harness.py + tasks + evaluate.py） |
 | `ph init` | 初始化 workspace，自动复制 harness、任务、评估脚本 |
 | `ph run` | 启动优化搜索循环 |
 | `ph status` | 进度表格，包含耗时、改进率和增量 |
@@ -403,6 +468,8 @@ python -m polyharness --version
 | `ph clean` | 清理候选目录释放磁盘空间（`--keep-best`、`-y`） |
 | `ph config show` | 显示当前 workspace 配置 |
 | `ph config set K V` | 用 dot-notation 修改配置值，并进行校验 |
+| `ph upgrade` | 升级 PolyHarness 到最新版本 |
+| `ph uninstall` | 卸载 PolyHarness（`-y` 跳过确认） |
 
 ### 全局标志
 
@@ -440,8 +507,7 @@ python -m polyharness --version
 ### 文本分类（情感分析）
 
 ```bash
-cd examples/text-classification
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template text-classification
 ph run --max-iterations 3
 
 # iter_0: 0.65 → iter_1: 1.00 ★ （简单词表 → 扩展词库）
@@ -450,8 +516,7 @@ ph run --max-iterations 3
 ### 数学应用题（数值推理）
 
 ```bash
-cd examples/math-word-problems
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template math-word-problems
 ph run --max-iterations 5
 
 # iter_0: 0.35 → iter_1: 0.50 → iter_2: 0.65 → iter_3: 0.90 ★
@@ -461,8 +526,7 @@ ph run --max-iterations 5
 ### 代码生成（函数合成）
 
 ```bash
-cd examples/code-generation
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template code-generation
 ph run --max-iterations 5
 
 # iter_0: 0.27 → iter_1: 0.50 → iter_2: 0.68 → iter_3: 0.95 ★
@@ -472,8 +536,7 @@ ph run --max-iterations 5
 ### API 调用（端点路由 + 参数提取）
 
 ```bash
-cd examples/api-calling
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template api-calling
 ph run --max-iterations 5
 
 # iter_0: 0.19 → iter_1: 0.55 → iter_2: 0.77 → iter_3: 0.87 ★
@@ -483,8 +546,7 @@ ph run --max-iterations 5
 ### RAG 问答（检索 + 答案抽取）
 
 ```bash
-cd examples/rag-qa
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template rag-qa
 ph run --max-iterations 5
 
 # iter_0: 0.51 → iter_1: 0.79 ★
@@ -519,14 +581,7 @@ bin/
 ├── ph.mjs                   # npm 包装器
 └── postinstall.mjs          # npm postinstall
 
-examples/
-├── text-classification/     # 20 个测试用例
-├── math-word-problems/      # 20 个测试用例
-├── code-generation/         # 20 个任务 × 3 组输入
-├── api-calling/             # 20 个测试用例
-└── rag-qa/                  # 20 个 QA 对 + 10 篇知识库文档
-
-tests/                       # 121 个测试（pytest）
+tests/                       # 128 个测试（pytest）
 ```
 
 ## 本地开发

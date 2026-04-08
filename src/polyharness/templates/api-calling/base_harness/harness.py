@@ -4,10 +4,8 @@ Given a user query, decide which API endpoint to call with what parameters.
 This is intentionally simplistic to give the Proposer room to improve.
 """
 
-import re
-import sys
 import json
-
+import sys
 
 # Available API catalog
 API_CATALOG = {

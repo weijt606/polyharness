@@ -182,6 +182,37 @@ def test_init_with_all_options(tmp_path):
 
 
 # ------------------------------------------------------------------
+# Template initialization
+# ------------------------------------------------------------------
+
+
+def test_init_with_template(tmp_path):
+    ws = Workspace.init(tmp_path / "ws", agent_backend="api", template="text-classification")
+    assert ws.is_initialized()
+    assert (ws.base_harness_dir / "harness.py").exists()
+    assert (ws.root / "tasks" / "test_cases.json").exists()
+    assert (ws.root / "evaluate.py").exists()
+    cfg = ws.load_config()
+    assert cfg.proposer.backend == "api"
+
+
+def test_init_template_unknown(tmp_path):
+    import click
+    import pytest
+
+    with pytest.raises(click.BadParameter, match="Unknown template"):
+        Workspace.init(tmp_path / "ws", template="nonexistent")
+
+
+def test_init_template_conflicts_with_base_harness(tmp_path):
+    import click
+    import pytest
+
+    with pytest.raises(click.UsageError, match="--template cannot be combined"):
+        Workspace.init(tmp_path / "ws", template="text-classification", base_harness="/tmp")
+
+
+# ------------------------------------------------------------------
 # Apply best harness
 # ------------------------------------------------------------------
 

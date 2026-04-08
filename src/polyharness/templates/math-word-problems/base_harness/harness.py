@@ -4,9 +4,9 @@ This is intentionally simplistic to give the Proposer room to improve.
 The harness extracts numbers and applies a basic heuristic.
 """
 
+import json
 import re
 import sys
-import json
 
 
 def solve(question: str) -> float:
