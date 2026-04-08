@@ -38,7 +38,10 @@ def doctor():
 @main.command()
 @click.option(
     "--agent",
-    type=click.Choice(["claude-code", "claw-code", "codex", "opencode", "api", "openai", "local"], case_sensitive=False),
+    type=click.Choice(
+        ["claude-code", "claw-code", "codex", "opencode", "api", "openai", "local"],
+        case_sensitive=False,
+    ),
     default="api",
     help="Agent backend to configure.",
 )
@@ -100,7 +103,10 @@ def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | No
 @click.option("--resume", is_flag=True, help="Resume an interrupted search from where it left off.")
 @click.option(
     "--backend",
-    type=click.Choice(["api", "openai", "claude-code", "claw-code", "codex", "opencode", "local"], case_sensitive=False),
+    type=click.Choice(
+        ["api", "openai", "claude-code", "claw-code", "codex", "opencode", "local"],
+        case_sensitive=False,
+    ),
     default=None,
     help="Override proposer backend without editing config.",
 )
