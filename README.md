@@ -274,6 +274,10 @@ ph wrap --auto-evolve opencode -p "Fix the flaky parser test"            # OpenC
 
 # API backends — wrap any script that calls a model
 ph wrap --auto-evolve python my_agent.py --task "Classify these reviews"  # Your own script (api / openai)
+
+# Local models (Ollama, vLLM, etc.) — same idea, wrap the command that calls the model
+ph wrap --auto-evolve ollama run llama3.3 "Summarize this document"       # Ollama CLI
+ph wrap --auto-evolve python infer.py --model local --input data.json    # Custom local inference script
 ```
 
 What happens:

@@ -274,6 +274,10 @@ ph wrap --auto-evolve opencode -p "修复不稳定的 parser 测试"       # Ope
 
 # API 后端 —— 包裹任何调用模型的脚本
 ph wrap --auto-evolve python my_agent.py --task "分类这些评论"  # 你自己的脚本（api / openai）
+
+# 本地模型（Ollama、vLLM 等）—— 同样的方式，包裹调用模型的命令
+ph wrap --auto-evolve ollama run llama3.3 "总结这篇文档"              # Ollama CLI
+ph wrap --auto-evolve python infer.py --model local --input data.json  # 自定义本地推理脚本
 ```
 
 这会发生什么：
