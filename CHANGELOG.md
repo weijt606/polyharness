@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-04-08
+
+### Added
+- **Online Evolution**: `ph wrap`, `ph traces`, `ph evolve` — collect traces from daily agent usage and auto-trigger evolution
+- `ph wrap <cmd>` — transparent command wrapper that records execution traces (agent, exit code, duration, output)
+- `--auto-evolve` flag for `ph wrap` — automatically triggers evolution when trace count reaches threshold
+- `--no-record-output` flag for `ph wrap` — skip stdout/stderr capture for sensitive output
+- `ph traces list` / `show` / `stats` / `clear` — manage collected traces
+- `ph evolve` — manually trigger an evolution cycle using collected traces
+- `collector.py` — trace collector engine (`~/.polyharness/traces/`)
+- `EvolutionConfig`, `EvolutionTriggerConfig`, `EvolutionNotifyConfig` in config models
+- `openai_proposer.py` — OpenAI-compatible API backend (Ollama, vLLM, DeepSeek, etc.)
+- 37 new tests (165 total)
+
+### Changed
+- Agent backends: 6 → 7 (added OpenAI-compatible)
+- CLI commands: 16 → 22
+- README rewritten with Auto-Evolution guide (Step 6), accurate project structure, corrected config defaults
+
+### Fixed
+- `ws.apply_best()` missing required `target` parameter
+
 ## [0.1.3] - 2026-04-08
 
 ### Added
