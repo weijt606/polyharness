@@ -1398,3 +1398,380 @@ def uninstall(yes: bool):
     else:
         console.print(f"[red]Uninstall failed:[/red] {result.stderr.strip()}")
         raise SystemExit(1)
+
+
+# ---------------------------------------------------------------------------
+# Online Evolution commands (v0.2.0)
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.argument("agent_cmd")
+@click.argument("agent_args", nargs=-1)
+@click.option(
+    "--workspace",
+    type=click.Path(),
+    default=None,
+    help="Workspace path for auto-scoring (optional).",
+)
+@click.option("--store", type=click.Path(), default=None, help="Trace store directory.")
+@click.option("--no-record-output", is_flag=True, help="Skip recording stdout/stderr.")
+@click.option(
+    "--auto-evolve",
+    is_flag=True,
+    help="Auto-trigger evolution when enough traces accumulate.",
+)
+def wrap(
+    agent_cmd: str,
+    agent_args: tuple[str, ...],
+    workspace: str | None,
+    store: str | None,
+    no_record_output: bool,
+    auto_evolve: bool,
+):
+    """Wrap an Agent CLI call — transparent forwarding + trace collection.
+
+    Usage:  ph wrap claude-code "fix the bug in auth.py"
+    """
+    import subprocess
+    import sys
+    import time as _time
+
+    from polyharness.collector import Collector
+
+    collector = Collector(store_dir=store)
+    full_cmd = [agent_cmd, *agent_args]
+
+    # Transparent forwarding — run agent normally
+    start = _time.monotonic()
+    try:
+        proc = subprocess.run(full_cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        console.print(f"[red]Error:[/red] Command not found: {agent_cmd}")
+        console.print("Make sure the agent CLI is installed and on your PATH.")
+        raise SystemExit(127)
+
+    duration = _time.monotonic() - start
+
+    # Output original results to user (zero-delay perception)
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+
+    # Record trace
+    trace_id = collector.record(
+        agent=agent_cmd,
+        command=full_cmd,
+        exit_code=proc.returncode,
+        duration=duration,
+        stdout=proc.stdout if not no_record_output else None,
+        stderr=proc.stderr if not no_record_output else None,
+        workspace=workspace,
+        record_output=not no_record_output,
+    )
+
+    if not console.quiet:
+        console.print(
+            f"\n[dim]PolyHarness: trace recorded ({trace_id})[/dim]",
+            highlight=False,
+        )
+
+    # Auto-evolve: check trigger condition and run evolution if met
+    if auto_evolve:
+        _try_auto_evolve(workspace=workspace, store=store, collector=collector)
+
+    sys.exit(proc.returncode)
+
+
+def _try_auto_evolve(
+    *,
+    workspace: str | None,
+    store: str | None,
+    collector: object,
+) -> None:
+    """Check trigger condition and run a background evolution cycle if met."""
+    from pathlib import Path
+
+    from polyharness.collector import Collector
+    from polyharness.config import PolyHarnessConfig
+
+    assert isinstance(collector, Collector)
+
+    # Resolve workspace — explicit flag > .ph_workspace in cwd
+    ws_path = Path(workspace).resolve() if workspace else Path.cwd() / ".ph_workspace"
+    config_path = ws_path / "config.yaml"
+    if not config_path.exists():
+        # No workspace to evolve against — silently skip
+        return
+
+    config = PolyHarnessConfig.from_yaml(config_path)
+    trigger = config.evolution.trigger
+
+    # Check accumulate_count threshold
+    pending = collector.count_since_last_evolution()
+    threshold = trigger.accumulate_count
+    if pending < threshold:
+        if not console.quiet:
+            console.print(
+                f"[dim]PolyHarness: {pending}/{threshold} traces until next evolution[/dim]",
+                highlight=False,
+            )
+        return
+
+    # Trigger! Run evolution inline (lightweight — default 3 iterations)
+    console.print(
+        f"\n[bold blue]PolyHarness: {pending} traces collected — triggering auto-evolution...[/bold blue]"
+    )
+
+    from polyharness.orchestrator import Orchestrator
+    from polyharness.workspace import Workspace
+
+    ws = Workspace(ws_path)
+    evo_max = config.evolution.max_iterations
+    config.search.max_iterations = evo_max
+    config.search.early_stop_patience = min(2, evo_max)
+
+    orchestrator = Orchestrator(workspace=ws, config=config)
+    result = orchestrator.run(resume=True)
+
+    # Log the evolution
+    import json
+    from datetime import datetime, timezone
+
+    evo_log = collector.store_dir.parent / "evolution_log.jsonl"
+    evo_log.parent.mkdir(parents=True, exist_ok=True)
+    with open(evo_log, "a") as f:
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "workspace": str(ws.root),
+            "traces_available": pending,
+            "best_iteration": result.best_iteration,
+            "best_score": result.best_score,
+            "total_iterations": result.total_iterations,
+            "auto": True,
+        }
+        f.write(json.dumps(entry) + "\n")
+
+    if result.best_score > 0 and result.best_iteration > 0:
+        console.print(
+            f"[green]Auto-evolution complete: best score {result.best_score:.4f} "
+            f"at iter_{result.best_iteration}[/green]"
+        )
+        if config.evolution.auto_apply:
+            console.print("[bold]Auto-applying improved harness...[/bold]")
+            ws.apply_best(ws.base_harness_dir)
+        else:
+            console.print("Run [bold]ph apply[/bold] to use the improved harness.")
+    else:
+        console.print("[yellow]Auto-evolution: no improvement found.[/yellow]")
+
+
+@main.group()
+def traces():
+    """View and manage collected Agent traces."""
+    pass
+
+
+@traces.command(name="list")
+@click.option("-n", "--limit", type=int, default=20, help="Number of traces to show.")
+@click.option("--store", type=click.Path(), default=None, help="Trace store directory.")
+def traces_list(limit: int, store: str | None):
+    """List recent traces."""
+    from polyharness.collector import Collector
+
+    collector = Collector(store_dir=store)
+    items = collector.list_traces(limit=limit)
+
+    if not items:
+        console.print("[yellow]No traces collected yet.[/yellow]")
+        console.print("Use [bold]ph wrap <agent> <args>[/bold] to start collecting.")
+        return
+
+    table = Table(title=f"Recent Traces (showing {len(items)})")
+    table.add_column("ID", style="dim", no_wrap=True)
+    table.add_column("Agent")
+    table.add_column("Exit", justify="center")
+    table.add_column("Duration", justify="right")
+    table.add_column("Score", justify="right")
+    table.add_column("Time")
+
+    for t in items:
+        score_str = f"{t.score:.4f}" if t.score is not None else "-"
+        dur_str = f"{t.duration:.1f}s"
+        exit_style = "green" if t.exit_code == 0 else "red"
+        # Show just the date+time portion of the ID for brevity
+        time_str = t.timestamp[:19].replace("T", " ") if t.timestamp else "-"
+        table.add_row(
+            t.id,
+            t.agent,
+            f"[{exit_style}]{t.exit_code}[/{exit_style}]",
+            dur_str,
+            score_str,
+            time_str,
+        )
+
+    console.print(table)
+
+
+@traces.command(name="show")
+@click.argument("trace_id")
+@click.option("--store", type=click.Path(), default=None, help="Trace store directory.")
+def traces_show(trace_id: str, store: str | None):
+    """Show details of a single trace."""
+    from polyharness.collector import Collector
+
+    collector = Collector(store_dir=store)
+    trace = collector.get_trace(trace_id)
+    if not trace:
+        raise click.ClickException(f"Trace not found: {trace_id}")
+
+    console.print(f"[bold]Trace:[/bold] {trace.id}")
+    console.print(f"[bold]Agent:[/bold] {trace.agent}")
+    console.print(f"[bold]Command:[/bold] {' '.join(trace.command)}")
+    console.print(f"[bold]Exit code:[/bold] {trace.exit_code}")
+    console.print(f"[bold]Duration:[/bold] {trace.duration:.2f}s")
+    console.print(f"[bold]Score:[/bold] {trace.score if trace.score is not None else '-'}")
+    console.print(f"[bold]Timestamp:[/bold] {trace.timestamp}")
+    if trace.workspace:
+        console.print(f"[bold]Workspace:[/bold] {trace.workspace}")
+
+    output = collector.get_trace_output(trace_id)
+    if output.get("stdout"):
+        console.rule("stdout")
+        console.print(output["stdout"])
+    if output.get("stderr"):
+        console.rule("stderr")
+        console.print(output["stderr"])
+
+
+@traces.command(name="stats")
+@click.option("--store", type=click.Path(), default=None, help="Trace store directory.")
+def traces_stats(store: str | None):
+    """Show trace collection statistics."""
+    from polyharness.collector import Collector
+
+    collector = Collector(store_dir=store)
+    s = collector.stats()
+
+    console.print(f"[bold]Total traces:[/bold] {s.total}")
+    console.print(f"[bold]Scored:[/bold] {s.scored}")
+    if s.mean_score is not None:
+        console.print(f"[bold]Mean score:[/bold] {s.mean_score:.4f}")
+    if s.latest_score is not None:
+        console.print(f"[bold]Latest score:[/bold] {s.latest_score:.4f}")
+    if s.agents:
+        console.print("[bold]Agents:[/bold]")
+        for agent, count in sorted(s.agents.items(), key=lambda x: -x[1]):
+            console.print(f"  {agent}: {count}")
+
+
+@traces.command(name="clear")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation.")
+@click.option("--keep", type=int, default=0, help="Keep the N most recent traces.")
+@click.option("--store", type=click.Path(), default=None, help="Trace store directory.")
+def traces_clear(yes: bool, keep: int, store: str | None):
+    """Remove collected traces."""
+    from polyharness.collector import Collector
+
+    collector = Collector(store_dir=store)
+    total = collector.stats().total
+
+    if total == 0:
+        console.print("[yellow]No traces to clear.[/yellow]")
+        return
+
+    msg = f"Remove {total - keep} traces" if keep else f"Remove all {total} traces"
+    if not yes:
+        click.confirm(f"{msg}?", abort=True)
+
+    removed = collector.clear(keep_recent=keep)
+    console.print(f"[green]Removed {removed} trace(s).[/green]")
+
+
+@main.command()
+@click.option(
+    "--workspace",
+    type=click.Path(exists=True),
+    default=".ph_workspace",
+    help="Workspace to evolve.",
+)
+@click.option("--store", type=click.Path(), default=None, help="Trace store directory.")
+@click.option(
+    "--max-iterations",
+    type=int,
+    default=None,
+    help="Override max iterations for this evolution cycle.",
+)
+def evolve(workspace: str, store: str | None, max_iterations: int | None):
+    """Trigger an online evolution cycle based on collected traces.
+
+    Reads recent traces, uses them as context, then runs a small-scale
+    search loop (default 3 iterations) to find a better harness.
+    """
+    from polyharness.collector import Collector
+    from polyharness.config import PolyHarnessConfig
+    from polyharness.orchestrator import Orchestrator
+    from polyharness.workspace import Workspace
+
+    ws = Workspace(Path(workspace).resolve())
+    config_path = ws.root / "config.yaml"
+    if not config_path.exists():
+        raise click.ClickException(
+            f"No config.yaml in {workspace}. Run 'ph init' first."
+        )
+
+    config = PolyHarnessConfig.from_yaml(config_path)
+
+    # Override max_iterations for lightweight online search
+    evo_max = max_iterations or config.evolution.max_iterations
+    config.search.max_iterations = evo_max
+    config.search.early_stop_patience = min(2, evo_max)
+
+    collector = Collector(store_dir=store)
+    stats = collector.stats()
+
+    console.rule("[bold blue]PolyHarness Online Evolution")
+    console.print(f"Traces collected: {stats.total} ({stats.scored} scored)")
+    if stats.mean_score is not None:
+        console.print(f"Mean score: {stats.mean_score:.4f}")
+    console.print(f"Evolution iterations: {evo_max}")
+    console.print()
+
+    if stats.total == 0:
+        console.print(
+            "[yellow]No traces collected yet. "
+            "Use 'ph wrap <agent> <args>' to start collecting.[/yellow]"
+        )
+        raise SystemExit(1)
+
+    # Run the search loop (reuses existing Orchestrator)
+    orchestrator = Orchestrator(workspace=ws, config=config)
+    result = orchestrator.run(resume=True)
+
+    # Record this evolution in the log
+    import json
+    from datetime import datetime, timezone
+
+    evo_log = collector.store_dir.parent / "evolution_log.jsonl"
+    evo_log.parent.mkdir(parents=True, exist_ok=True)
+    with open(evo_log, "a") as f:
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "workspace": str(ws.root),
+            "traces_available": stats.total,
+            "best_iteration": result.best_iteration,
+            "best_score": result.best_score,
+            "total_iterations": result.total_iterations,
+        }
+        f.write(json.dumps(entry) + "\n")
+
+    console.print()
+    if result.best_score > 0 and result.best_iteration > 0:
+        console.print(
+            f"[green]Evolution complete: best score {result.best_score:.4f} "
+            f"at iter_{result.best_iteration}[/green]"
+        )
+        console.print("Run [bold]ph apply[/bold] to use the improved harness.")
+    else:
+        console.print("[yellow]No improvement found in this evolution cycle.[/yellow]")

@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-121%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-165%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -30,10 +30,11 @@ Your AI agent runs the same harness every time. Same prompts, same tool config, 
 | | |
 |---|---|
 | **Self-Evolution** | Iteratively searches over harness changes and keeps the full evaluation history in one workspace. |
-| **6 Agent Backends** | Claude Code · Claw Code · Codex · OpenCode · API direct · Local — plug in any CLI agent. |
+| **7 Agent Backends** | Claude Code · Claw Code · Codex · OpenCode · API direct · OpenAI-compatible · Local — plug in any CLI agent. |
 | **Full History** | Every iteration's code, scores, and traces preserved. The Meta-Harness paper reports that non-Markovian search outperforms blind retries. |
 | **Search Tree** | Visualize the optimization path. Compare any two candidates with per-task diffs. |
 | **One-Command Setup** | `ph init --base-harness ... --task-dir ...` — copies files, configures workspace, done. |
+| **Online Evolution** | `ph wrap` records every agent invocation. When enough traces accumulate, `ph evolve` triggers a lightweight search cycle — your agent improves while you work. |
 | **Closed Loop** | init → run → inspect → apply. You choose when to write the best-scoring candidate back to your project. |
 
 ---
@@ -258,6 +259,74 @@ ph export ./my-optimized       # or export to any directory
 ph clean --keep-best           # remove candidates to free disk space
 ```
 
+### 6. Auto-Evolution
+
+Steps 1–5 run a **batch** optimization loop. But you can also let PolyHarness collect data from your **daily agent usage** and trigger evolution automatically.
+
+Just add `ph wrap --auto-evolve` in front of your agent command (pick the one matching your setup):
+
+```bash
+# CLI agent backends — wrap the agent you already use
+ph wrap --auto-evolve claude -p "Refactor the auth module to use JWT"   # Claude Code
+ph wrap --auto-evolve claw -p "Write integration tests for payments"     # Claw Code
+ph wrap --auto-evolve codex "Add retry logic to the API client"          # Codex
+ph wrap --auto-evolve opencode -p "Fix the flaky parser test"            # OpenCode
+
+# Local models — wrap the CLI command directly
+ph wrap --auto-evolve ollama run gemma3 "Summarize this document"         # Ollama
+```
+
+> **Note:** For API backends (DeepSeek, OpenAI, etc.), use the batch workflow in Steps 1–5 with `ph init --agent openai` instead.
+
+What happens:
+1. Agent output **passes through transparently** — your workflow doesn't change.
+2. Each invocation records a **trace** (agent, command, exit code, duration, output) in `~/.polyharness/traces/`.
+3. When the trace count reaches the threshold (default 50, configurable), **PolyHarness auto-triggers a lightweight evolution cycle** — no manual intervention needed.
+
+Before the threshold is reached, you'll see a quiet progress hint:
+```
+PolyHarness: trace recorded (20260408_143012_a1b2c3d4)
+PolyHarness: 7/50 traces until next evolution
+```
+
+When the threshold is hit:
+```
+PolyHarness: 50 traces collected — triggering auto-evolution...
+───────── PolyHarness Online Evolution ─────────
+...
+Auto-evolution complete: best score 0.8700 at iter_2
+Run ph apply to use the improved harness.
+```
+
+#### Configuration
+
+Tune the trigger threshold in your workspace `config.yaml`:
+
+```yaml
+evolution:
+  trigger:
+    strategy: accumulate
+    accumulate_count: 10    # trigger every 10 traces (default: 50)
+  max_iterations: 3         # iterations per evolution cycle
+  auto_apply: false         # set true to auto-apply (use with caution)
+```
+
+#### Manual control
+
+You can also manage traces and trigger evolution manually at any time:
+
+```bash
+ph traces list                 # table of recent traces
+ph traces stats                # summary: total, scored, per-agent breakdown
+ph traces show <trace-id>      # full detail + captured output
+ph traces clear --keep 100     # prune old traces
+ph evolve                      # trigger evolution manually
+```
+
+> **Tip:** Use `--no-record-output` if you don't want stdout/stderr saved (e.g., for sensitive output). Metadata is always recorded.
+
+> **Tip:** Create a shell alias for even less typing: `alias cc="ph wrap --auto-evolve claude"`
+
 ### Try it now (no API key needed)
 
 ```bash
@@ -408,6 +477,18 @@ harness:
   editable_files:              # Files the Proposer is allowed to modify
     - harness.py
     - prompt_template.txt
+
+evolution:
+  mode: batch                  # batch | online
+  trigger:
+    strategy: accumulate        # degradation | accumulate | cron | manual
+    accumulate_count: 50        # Trigger after N new traces (default: 50)
+    min_samples: 5              # Minimum traces before evolution
+    window_size: 20             # Sliding window for score analysis
+    threshold: -0.05            # Score drop that triggers degradation strategy
+  auto_apply: false             # Automatically apply improved harness
+  max_iterations: 3             # Iterations per evolution cycle
+  record_output: true           # Capture stdout/stderr in traces
 ```
 
 You can modify values via CLI: `ph config set search.max_iterations 30`
@@ -468,6 +549,12 @@ python -m polyharness --version
 | `ph clean` | Remove candidate dirs to free disk space (`--keep-best`, `-y`) |
 | `ph config show` | Display the current workspace configuration |
 | `ph config set K V` | Modify a config value via dot-notation (with validation) |
+| `ph wrap <cmd> [args]` | Transparently forward a command, record execution trace (duration, exit code, output) |
+| `ph traces list` | List collected traces in a table (`-n` to limit) |
+| `ph traces show <id>` | Show full detail of a trace including captured output |
+| `ph traces stats` | Summary statistics: total traces, scored count, agent distribution |
+| `ph traces clear` | Remove collected traces (`--keep N` to retain newest, `-y` to skip confirm) |
+| `ph evolve` | Trigger an online evolution cycle using collected traces as context |
 | `ph upgrade` | Upgrade PolyHarness to the latest version |
 | `ph uninstall` | Uninstall PolyHarness from the current environment (`-y` to skip confirm) |
 
@@ -496,6 +583,23 @@ python -m polyharness --version
 --resume             Continue an interrupted search from where it left off
 --backend <name>     Override proposer backend without editing config
 --strategy <name>    Override parent selection: best | tournament | all
+```
+
+### `ph wrap` options
+
+```
+--workspace PATH     Associate trace with a workspace
+--store PATH         Custom trace store directory
+--no-record-output   Don't capture stdout/stderr (record metadata only)
+--auto-evolve        Auto-trigger evolution when enough traces accumulate
+```
+
+### `ph evolve` options
+
+```
+--workspace PATH          Workspace to evolve (default: .ph_workspace)
+--store PATH              Custom trace store directory
+--max-iterations INTEGER  Override max iterations for this cycle
 ```
 
 ---
@@ -558,30 +662,40 @@ ph run --max-iterations 5
 ## Project Structure
 
 ```
-src/polyharness/
-├── cli.py                   # Click CLI — 16 commands/subcommands
-├── config.py                # Pydantic config models
-├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery
-├── workspace.py             # Filesystem workspace + agent instruction injection
-├── search_log.py            # JSONL append-only search log
-├── doctor.py                # Environment detection for all backends
-├── evaluator/
-│   └── evaluator.py         # PythonEvaluator (subprocess)
-├── proposer/
-│   ├── api_proposer.py      # Anthropic API direct + tool-use loop
-│   ├── cli_proposer.py      # CLIProposer — unified subprocess management
-│   ├── local_proposer.py    # Offline rule-based (5 task types)
-│   └── adapters/            # Per-agent CLI adapters
-│       ├── claude_code.py   # claude -p
-│       ├── claw_code.py     # claw -p
-│       ├── codex.py         # codex --quiet --auto-edit
-│       └── opencode.py      # opencode -p
-
-bin/
-├── ph.mjs                   # npm wrapper
-└── postinstall.mjs          # npm postinstall
-
-tests/                       # 128 tests (pytest)
+polyharness/
+├── src/polyharness/
+│   ├── cli.py                   # Click CLI — 22 commands/subcommands
+│   ├── config.py                # Pydantic config models (+ EvolutionConfig)
+│   ├── collector.py             # Trace collector for online evolution
+│   ├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery
+│   ├── workspace.py             # Filesystem workspace + agent instruction injection
+│   ├── search_log.py            # JSONL append-only search log
+│   ├── doctor.py                # Environment detection for all backends
+│   ├── evaluator/
+│   │   └── evaluator.py         # PythonEvaluator (subprocess)
+│   ├── proposer/
+│   │   ├── api_proposer.py      # Anthropic API direct + tool-use loop
+│   │   ├── openai_proposer.py   # OpenAI-compatible API (Ollama, vLLM, etc.)
+│   │   ├── cli_proposer.py      # CLIProposer — unified subprocess management
+│   │   ├── local_proposer.py    # Offline rule-based (5 task types)
+│   │   └── adapters/            # Per-agent CLI adapters
+│   │       ├── claude_code.py   # claude -p
+│   │       ├── claw_code.py     # claw -p
+│   │       ├── codex.py         # codex --quiet --auto-edit
+│   │       └── opencode.py      # opencode -p
+│   └── templates/               # 5 built-in task templates
+│       ├── text-classification/
+│       ├── math-word-problems/
+│       ├── code-generation/
+│       ├── rag-qa/
+│       └── api-calling/
+├── tests/                       # 165 tests (pytest)
+├── bin/                         # npm wrapper (ph.mjs, postinstall.mjs)
+├── docs/
+│   ├── development/             # Product roadmap & technical architecture
+│   └── research/references/     # Meta-Harness paper
+├── pyproject.toml               # Python package config
+└── package.json                 # npm package config
 ```
 
 ## Local Development
