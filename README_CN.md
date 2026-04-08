@@ -20,6 +20,9 @@
 
 ---
 
+> **什么是 "Harness"？**
+> Harness 是包裹你的 AI agent 与任务交互的那层代码——包括 prompt 模板、工具配置、输出解析逻辑，以及任何预处理/后处理步骤。它是 agent *如何*解决问题的方式，而不是模型本身。PolyHarness 通过迭代搜索自动寻找更优的 harness 配置，省去你手动调参的功夫。
+
 你的 AI agent 每次都用同一套 harness 跑任务。同样的 prompt，同样的工具配置，同样的策略，不管它失败多少次都如此。
 
 **PolyHarness 用搜索循环来处理这个问题。** 它记录每轮迭代、评估候选 harness 变更，并利用累计历史去搜索更高分的配置。你只需执行一个命令来启动这个流程。
@@ -129,10 +132,24 @@ ph doctor
 ### 3. 初始化 workspace
 
 ```bash
-ph init --agent claude-code         --base-harness ./my_harness/         --task-dir ./my_tasks/         --eval-script ./evaluate.py
+ph init \
+  --agent claude-code \
+  --base-harness ./my_harness/ \
+  --task-dir ./my_tasks/ \
+  --eval-script ./evaluate.py
 ```
 
 这会将原有项目代码复制到一个隔离的 **优化 Workspace** 中（默认在当前目录下创建 `.ph_workspace`，也可通过 `--workspace` 指定其他目录）。
+
+#### 你需要准备什么
+
+| 内容 | 说明 | 示例 |
+|------|-----|------|
+| **base-harness/** | 包含你的起始 harness 代码的目录，至少需要一个入口文件（默认 `harness.py`）。这就是 PolyHarness 将要迭代优化的代码。 | 一个包含 `classify(text)` 或 `solve(question)` 函数的 Python 文件 |
+| **tasks/** | 包含 `test_cases.json` 的目录——一个 JSON 数组，每项包含测试输入和期望输出，字段为 `"input"` 和 `"expected"`。 | `[{"input": "2+3", "expected": "5"}, ...]` |
+| **evaluate.py** | 评估脚本，运行 harness 处理每个任务并输出 JSON 分数。必须将 `{"overall_score": 0.85, "task_scores": {...}}` 打印到 stdout。 | 参考任意 `examples/*/evaluate.py` 获取可用模板 |
+
+> **提示：** 如果不确定格式，建议从 `examples/` 目录中复制一个完整的示例作为起点来修改。
 
 **配置你的 Agent**
 
@@ -141,7 +158,8 @@ PolyHarness 会通过沙盒编排将你的 Agent 的工作目录（CWD）限制�
 | 使用场景 | 配置方法 |
 |----------|------------------|
 | **受原生支持的 CLI Agent 工具** | 使用 `ph init --agent <name>`。系统会自动注入其专属提示词指令（如 `CLAUDE.md`）。<br>*(支持: claude-code, claw-code, codex, opencode)* |
-| **直接调用大模型接口（无CLI）** | 使用 `ph init --agent api`。无需第三方命令行工具，只需在 `ph run` 前设置系统变量 `export OPENAI_API_KEY="sk-..."`。 |
+| **Anthropic API 直连** | 使用 `ph init --agent api`。在 `ph run` 前设置 `export ANTHROPIC_API_KEY="sk-ant-..."`。 |
+| **OpenAI / 本地模型** | 使用 `ph init --agent openai`。然后配置 endpoint——参见下方 [本地模型配置](#本地模型配置) 章节。 |
 | **CLI 命令被自定义 / 路径未响应** | 如果你的 CLI Agent 使用了非标命令（或未设置全局 PATH），请在初始化后手动修改 workspace 根目录下的 `config.yaml`：<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }` |
 
 ### 4. 运行优化循环
@@ -253,6 +271,82 @@ Proposer 在生成下一个候选之前会读取**所有这些信息**。它能�
 `ph doctor` 会自动检测所有可用后端并显示状态。
 
 当你运行 `ph init --agent claude-code` 时，PolyHarness 会在 workspace 中自动生成 `CLAUDE.md` 指令文件，告诉 agent 如何作为优化 Proposer 工作。`CLAW.md`、`CODEX.md`、`OPENCODE.md` 也是同样的机制，每个 agent 都使用它自己的原生指令格式。
+
+### 本地模型配置
+
+如果你在本地运行模型（Ollama、vLLM、LM Studio 或任何 OpenAI 兼容服务），使用 `openai` 后端：
+
+```bash
+# 1. 初始化
+ph init --agent openai \
+  --base-harness ./my_harness/ \
+  --task-dir ./my_tasks/
+
+# 2. 配置本地 endpoint
+ph config set proposer.model llama3.3
+ph config set proposer.base_url http://localhost:11434/v1
+ph config set proposer.api_key sk-dummy
+
+# 3. 运行
+ph run
+```
+
+或者直接编辑 `.ph_workspace/config.yaml`：
+
+```yaml
+proposer:
+  backend: openai
+  model: llama3.3                          # 你的本地模型名称
+  base_url: http://localhost:11434/v1      # Ollama 默认端口
+  api_key: sk-dummy                        # 本地模型不需要真实 key
+  max_tokens: 16384
+  temperature: 0.7
+```
+
+常见本地服务端点：
+
+| 工具 | `base_url` |
+|------|-----------|
+| Ollama | `http://localhost:11434/v1` |
+| vLLM | `http://localhost:8000/v1` |
+| LM Studio | `http://localhost:1234/v1` |
+| LocalAI | `http://localhost:8080/v1` |
+
+---
+
+## 配置参考
+
+`ph init` 之后，workspace 中会生成一份 `config.yaml`，包含以下字段：
+
+```yaml
+search:
+  max_iterations: 20          # 最大搜索迭代次数
+  early_stop_patience: 5      # 连续 N 轮无改进后停止
+  parent_selection: best       # 父候选选择策略: best | tournament | all
+
+proposer:
+  backend: api                 # api | openai | claude-code | claw-code | codex | opencode | local
+  model: claude-sonnet-4-20250514  # 模型名称（api/openai 后端使用）
+  base_url: null               # 自定义 API 端点（openai 后端使用）
+  api_key: null                # API 密钥覆盖（null = 使用环境变量）
+  max_tokens: 16384            # 每轮 proposer 最大输出 token 数
+  temperature: 0.7             # 采样温度（0.0 – 2.0）
+  cli_path: null               # 自定义 CLI 可执行文件路径（null = 自动检测）
+
+evaluator:
+  type: python                 # python | docker | custom
+  entry: evaluate.py           # 评估脚本入口
+  timeout: 300                 # 每个任务的超时时间（秒）
+
+harness:
+  language: python             # Harness 代码语言
+  entry: harness.py            # Harness 入口文件
+  editable_files:              # Proposer 可修改的文件列表
+    - harness.py
+    - prompt_template.txt
+```
+
+也可通过 CLI 修改配置：`ph config set search.max_iterations 30`
 
 ---
 
