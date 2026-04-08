@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+import click
+
 from polyharness.config import PolyHarnessConfig
 from polyharness.search_log import SearchLog
 
@@ -17,8 +19,31 @@ class Workspace:
     CONFIG_FILE = "config.yaml"
     SEARCH_LOG = "search_log.jsonl"
 
+    AVAILABLE_TEMPLATES = [
+        "text-classification",
+        "math-word-problems",
+        "code-generation",
+        "rag-qa",
+        "api-calling",
+    ]
+
     def __init__(self, root: str | Path):
         self.root = Path(root).resolve()
+
+    @classmethod
+    def _resolve_template(cls, name: str) -> Path:
+        """Locate a bundled template directory by name."""
+        import importlib.resources
+
+        templates_pkg = importlib.resources.files("polyharness.templates")
+        tpl_path = templates_pkg / name  # type: ignore[operator]
+        # Traverse into a real path (works for both editable and installed)
+        resolved = Path(str(tpl_path))
+        if not resolved.is_dir():
+            available = ", ".join(cls.AVAILABLE_TEMPLATES)
+            msg = f"Unknown template '{name}'. Available: {available}"
+            raise click.BadParameter(msg, param_hint="'--template'")
+        return resolved
 
     @classmethod
     def init(
@@ -26,6 +51,7 @@ class Workspace:
         root: str | Path,
         agent_backend: str = "api",
         *,
+        template: str | None = None,
         task_dir: str | Path | None = None,
         eval_script: str | Path | None = None,
         base_harness: str | Path | None = None,
@@ -36,6 +62,9 @@ class Workspace:
         ----------
         root : workspace directory
         agent_backend : proposer backend name
+        template : name of a bundled example template (e.g. 'text-classification').
+            When given, sets base_harness, task_dir, and eval_script automatically.
+            Mutually exclusive with those three flags.
         task_dir : directory containing tasks/ and optionally evaluate.py.
             When given, copies ``tasks/`` into the workspace and sets the
             evaluator entry path in config.
@@ -44,6 +73,16 @@ class Workspace:
         base_harness : directory containing the starting harness code.
             Files are copied into ``base_harness/``.
         """
+        # --template resolves to base_harness + task_dir from bundled examples
+        if template is not None:
+            if base_harness or task_dir or eval_script:
+                raise click.UsageError(
+                    "--template cannot be combined with --base-harness, --task-dir, or --eval-script."
+                )
+            tpl_dir = cls._resolve_template(template)
+            base_harness = tpl_dir / "base_harness"
+            task_dir = tpl_dir
+
         ws = cls(root)
         ws.root.mkdir(parents=True, exist_ok=True)
 

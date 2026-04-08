@@ -63,7 +63,7 @@ def evaluate(candidate_dir: Path, task_file: Path | None = None) -> dict:
             is_correct = prediction == expected
             correct += int(is_correct)
             task_scores[task_name] = 1.0 if is_correct else 0.0
-        except Exception as e:
+        except Exception:
             task_scores[task_name] = 0.0
 
     overall = correct / total if total > 0 else 0.0

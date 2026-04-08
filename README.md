@@ -75,7 +75,7 @@ You want to tune it for your specific tasks — without manually tweaking prompt
 
 ```bash
 pip install polyharness
-ph init --agent claude-code --task-dir ./my_tasks
+ph init --agent claude-code --template text-classification
 ph run
 ph apply
 ```
@@ -131,25 +131,96 @@ This auto-detects which agent backends (Claude Code, Codex, etc.) are installed 
 
 ### 3. Initialize a workspace
 
+`ph init` sets up two things:
+
+1. **Who optimizes** (`--agent`) — which AI does the thinking: a CLI tool like `claude-code`, or an API like `api` / `openai`.
+2. **What to optimize** (`--template` or `--base-harness` + `--task-dir`) — your harness code, test cases, and evaluation script. These three are always needed for `ph run` to work.
+
+#### Option A: Use a bundled template (recommended for first run)
+
+PolyHarness ships with ready-to-run templates. One command sets up everything:
+
+```bash
+ph init --agent api --template text-classification
+```
+
+This copies a complete set of harness + tasks + evaluate script into the workspace automatically:
+
+```
+.ph_workspace/
+├── base_harness/
+│   └── harness.py          # starting code to optimize
+├── tasks/
+│   └── test_cases.json     # test inputs + expected outputs
+├── evaluate.py             # scoring script
+└── config.yaml             # auto-generated
+```
+
+That's it — skip to [step 4](#4-run-the-optimization-loop).
+
+> Available templates: `text-classification`, `math-word-problems`, `code-generation`, `rag-qa`, `api-calling`.
+
+#### Option B: Use your own project
+
+You need three files: `harness.py` (code to optimize), `tasks/test_cases.json` (test data), and `evaluate.py` (scoring script). Generate them all with one command:
+
+```bash
+ph new my-project
+```
+
+This creates:
+
+```
+my-project/
+├── base_harness/
+│   └── harness.py          # ← edit: your starting logic
+├── tasks/
+│   └── test_cases.json     # ← edit: your test inputs + expected outputs
+└── evaluate.py             # ← edit if needed: scoring logic
+```
+
+Edit the generated files for your task. For example, if you're building a text classifier:
+
+```python
+# my-project/base_harness/harness.py
+def solve(input_data: str) -> str:
+    # A simple starting point — the agent will improve this
+    if "good" in input_data.lower():
+        return "positive"
+    return "negative"
+```
+
+```json
+// my-project/tasks/test_cases.json
+[
+  {"input": "This product is good", "expected": "positive"},
+  {"input": "Terrible experience",  "expected": "negative"},
+  {"input": "The meeting is at 3pm", "expected": "neutral"}
+]
+```
+
+> `evaluate.py` works out of the box — it calls `harness.solve(case["input"])`, compares with `case["expected"]`, and reports accuracy. Only edit it if your scoring needs custom logic.
+
+Then initialize:
+
 ```bash
 ph init \
   --agent claude-code \
-  --base-harness ./my_harness/ \
-  --task-dir ./my_tasks/ \
-  --eval-script ./evaluate.py
+  --base-harness ./my-project/base_harness \
+  --task-dir ./my-project
 ```
 
-This copies your harness code, test cases, and evaluation script into an isolated **optimization workspace** (by default `.ph_workspace` in the current directory, or the folder specified by `--workspace`).
+| Flag | What to pass | Required? |
+|------|-------------|:---------:|
+| `--agent` | Who optimizes: `claude-code`, `codex`, `api`, `openai`, etc. | Yes (default `api`) |
+| `--base-harness` | Directory with your starting harness code (at least `harness.py`) | Yes* |
+| `--task-dir` | Directory with `tasks/test_cases.json` and optionally `evaluate.py` | Yes* |
+| `--eval-script` | Path to `evaluate.py`, if it lives outside `--task-dir` | Only if not in task-dir |
+| `--workspace` | Where to create the workspace (default `.ph_workspace`) | No |
 
-#### What you need to prepare
+\* Technically optional at `init` time, but `ph run` will fail without harness code and test data.
 
-| Item | What it is | Example |
-|------|-----------|---------|
-| **base-harness/** | A directory with your starting harness code. Must contain at least one entry file (default: `harness.py`). This is the code PolyHarness will iteratively optimize. | A Python file with a `classify(text)` or `solve(question)` function |
-| **tasks/** | A directory with `test_cases.json` — a JSON array of test inputs and expected outputs. Each item should have an `"input"` and `"expected"` field. | `[{"input": "2+3", "expected": "5"}, ...]` |
-| **evaluate.py** | A script that runs the harness against each task and outputs a JSON score. Must print `{"overall_score": 0.85, "task_scores": {...}}` to stdout. | See any `examples/*/evaluate.py` for a working template |
-
-> **Tip:** If you're unsure about the format, start with one of the bundled `examples/` directories — each one is a complete, working template you can copy and adapt.
+`ph init` copies everything into an isolated **optimization workspace** — your original code is never modified.
 
 **Configure Your Agent**
 
@@ -190,14 +261,9 @@ ph clean --keep-best           # remove candidates to free disk space
 ### Try it now (no API key needed)
 
 ```bash
-cd examples/math-word-problems
-
-ph init --agent local \
-        --base-harness ./base_harness \
-        --task-dir . \
-        --workspace .ph_workspace
-
-ph log --workspace .ph_workspace
+ph init --agent local --template math-word-problems
+ph run --max-iterations 5
+ph log
 
 # Search Tree
 # └── iter_0  0.3500
@@ -277,10 +343,8 @@ When you run `ph init --agent claude-code`, PolyHarness automatically generates 
 If you're running a local model (Ollama, vLLM, LM Studio, or any OpenAI-compatible server), use the `openai` backend:
 
 ```bash
-# 1. Initialize
-ph init --agent openai \
-  --base-harness ./my_harness/ \
-  --task-dir ./my_tasks/
+# 1. Initialize (use a template, or --base-harness + --task-dir for your own project)
+ph init --agent openai --template text-classification
 
 # 2. Configure your local endpoint
 ph config set proposer.model llama3.3
@@ -388,6 +452,7 @@ python -m polyharness --version
 | Command | Description |
 |---------|-------------|
 | `ph doctor` | Detect installed agents and environment status |
+| `ph new [dir]` | Scaffold a new harness project (generates harness.py + tasks + evaluate.py) |
 | `ph init` | Initialize workspace with auto-copy of harness, tasks, eval script |
 | `ph run` | Start the optimization search loop |
 | `ph status` | Progress table with elapsed time, improvement rate, and delta |
@@ -403,6 +468,8 @@ python -m polyharness --version
 | `ph clean` | Remove candidate dirs to free disk space (`--keep-best`, `-y`) |
 | `ph config show` | Display the current workspace configuration |
 | `ph config set K V` | Modify a config value via dot-notation (with validation) |
+| `ph upgrade` | Upgrade PolyHarness to the latest version |
+| `ph uninstall` | Uninstall PolyHarness from the current environment (`-y` to skip confirm) |
 
 ### Global flags
 
@@ -440,8 +507,7 @@ The score trajectories below are measured from the bundled examples using the cu
 ### Text Classification (sentiment analysis)
 
 ```bash
-cd examples/text-classification
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template text-classification
 ph run --max-iterations 3
 
 # iter_0: 0.65 → iter_1: 1.00 ★  (naive word list → expanded lexicon)
@@ -450,8 +516,7 @@ ph run --max-iterations 3
 ### Math Word Problems (numerical reasoning)
 
 ```bash
-cd examples/math-word-problems
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template math-word-problems
 ph run --max-iterations 5
 
 # iter_0: 0.35 → iter_1: 0.50 → iter_2: 0.65 → iter_3: 0.90 ★
@@ -461,8 +526,7 @@ ph run --max-iterations 5
 ### Code Generation (function synthesis)
 
 ```bash
-cd examples/code-generation
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template code-generation
 ph run --max-iterations 5
 
 # iter_0: 0.27 → iter_1: 0.50 → iter_2: 0.68 → iter_3: 0.95 ★
@@ -472,8 +536,7 @@ ph run --max-iterations 5
 ### API Calling (endpoint routing + parameter extraction)
 
 ```bash
-cd examples/api-calling
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template api-calling
 ph run --max-iterations 5
 
 # iter_0: 0.19 → iter_1: 0.55 → iter_2: 0.77 → iter_3: 0.87 ★
@@ -483,8 +546,7 @@ ph run --max-iterations 5
 ### RAG Question Answering (retrieval + answer extraction)
 
 ```bash
-cd examples/rag-qa
-ph init --agent local --base-harness ./base_harness --task-dir .
+ph init --agent local --template rag-qa
 ph run --max-iterations 5
 
 # iter_0: 0.51 → iter_1: 0.79 ★
@@ -519,14 +581,7 @@ bin/
 ├── ph.mjs                   # npm wrapper
 └── postinstall.mjs          # npm postinstall
 
-examples/
-├── text-classification/     # 20 test cases
-├── math-word-problems/      # 20 test cases
-├── code-generation/         # 20 tasks × 3 inputs
-├── api-calling/             # 20 test cases
-└── rag-qa/                  # 20 QA pairs + 10-doc knowledge base
-
-tests/                       # 121 tests (pytest)
+tests/                       # 128 tests (pytest)
 ```
 
 ## Local Development

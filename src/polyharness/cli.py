@@ -36,6 +36,122 @@ def doctor():
 
 
 @main.command()
+@click.argument("project_dir", default="my-harness")
+def new(project_dir: str):
+    """Scaffold a new harness project (base_harness + tasks + evaluate).
+
+    Creates PROJECT_DIR/ with starter files you can edit, then feed to `ph init`.
+    """
+    dest = Path(project_dir).resolve()
+    if dest.exists() and any(dest.iterdir()):
+        raise click.ClickException(f"Directory '{project_dir}' already exists and is not empty.")
+
+    bh = dest / "base_harness"
+    bh.mkdir(parents=True, exist_ok=True)
+    (dest / "tasks").mkdir(exist_ok=True)
+
+    (bh / "harness.py").write_text(
+        '"""Harness — your starting implementation.\n'
+        "\n"
+        "PolyHarness will iteratively optimize this code.\n"
+        'Write a simple first version; the agent will improve it.\n'
+        '"""\n'
+        "\n"
+        "\n"
+        "def solve(input_data: str) -> str:\n"
+        '    """Process input and return a result.\n'
+        "\n"
+        "    Rename this function or add more — just make sure evaluate.py\n"
+        "    can import and call it.\n"
+        '    """\n'
+        "    # TODO: replace with your logic\n"
+        "    return input_data\n"
+    )
+
+    (dest / "tasks" / "test_cases.json").write_text(
+        "[\n"
+        '  {"input": "example input 1", "expected": "expected output 1"},\n'
+        '  {"input": "example input 2", "expected": "expected output 2"},\n'
+        '  {"input": "example input 3", "expected": "expected output 3"}\n'
+        "]\n"
+    )
+
+    (dest / "evaluate.py").write_text(
+        '"""Evaluate harness against test cases.\n'
+        "\n"
+        "Usage: python evaluate.py <candidate_dir> [task_file]\n"
+        "\n"
+        "Must print JSON to stdout:\n"
+        '  {"overall_score": 0.85, "task_scores": {"case_000": 1.0, ...}}\n'
+        '"""\n'
+        "\n"
+        "import importlib.util\n"
+        "import json\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "\n"
+        "\n"
+        "def load_harness(candidate_dir: Path):\n"
+        '    spec = importlib.util.spec_from_file_location("harness", candidate_dir / "harness.py")\n'
+        "    module = importlib.util.module_from_spec(spec)\n"
+        "    spec.loader.exec_module(module)\n"
+        "    return module\n"
+        "\n"
+        "\n"
+        "def evaluate(candidate_dir: Path, task_file: Path | None = None) -> dict:\n"
+        "    harness = load_harness(candidate_dir)\n"
+        "\n"
+        "    # Find test cases\n"
+        "    if task_file and task_file.exists():\n"
+        "        test_cases = json.loads(task_file.read_text())\n"
+        "    else:\n"
+        "        for d in [candidate_dir.parent.parent, candidate_dir.parent, Path(__file__).parent]:\n"
+        '            f = d / "tasks" / "test_cases.json"\n'
+        "            if f.exists():\n"
+        "                test_cases = json.loads(f.read_text())\n"
+        "                break\n"
+        "        else:\n"
+        '            return {"overall_score": 0.0, "error": "No test cases found"}\n'
+        "\n"
+        "    correct = 0\n"
+        "    task_scores = {}\n"
+        "    for i, case in enumerate(test_cases):\n"
+        "        try:\n"
+        '            result = harness.solve(case["input"])\n'
+        '            is_correct = result == case["expected"]\n'
+        "            correct += int(is_correct)\n"
+        '            task_scores[f"case_{i:03d}"] = 1.0 if is_correct else 0.0\n'
+        "        except Exception:\n"
+        '            task_scores[f"case_{i:03d}"] = 0.0\n'
+        "\n"
+        "    total = len(test_cases)\n"
+        "    return {\n"
+        '        "overall_score": correct / total if total else 0.0,\n'
+        '        "task_scores": task_scores,\n'
+        "    }\n"
+        "\n"
+        "\n"
+        'if __name__ == "__main__":\n'
+        "    candidate = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()\n"
+        "    task = Path(sys.argv[2]) if len(sys.argv) > 2 else None\n"
+        "    print(json.dumps(evaluate(candidate, task)))\n"
+    )
+
+    console.print(f"[green]Created project scaffold at[/green] [bold]{dest}[/bold]")
+    console.print(f"  {project_dir}/base_harness/harness.py  — edit your logic here")
+    console.print(f"  {project_dir}/tasks/test_cases.json    — add your test cases")
+    console.print(f"  {project_dir}/evaluate.py              — adjust scoring if needed")
+    console.print()
+    console.print("Next steps:")
+    console.print("  1. Edit the files above for your task")
+    console.print(
+        f"  2. ph init --agent claude-code \\\n"
+        f"       --base-harness {project_dir}/base_harness --task-dir {project_dir}"
+    )
+    console.print("  3. ph run")
+
+
+@main.command()
 @click.option(
     "--agent",
     type=click.Choice(
@@ -69,19 +185,38 @@ def doctor():
     default=None,
     help="Directory containing the starting harness code.",
 )
-def init(agent: str, workspace: str, task_dir: str | None, eval_script: str | None, base_harness: str | None):
+@click.option(
+    "--template",
+    type=click.Choice(
+        ["text-classification", "math-word-problems", "code-generation", "rag-qa", "api-calling"],
+        case_sensitive=False,
+    ),
+    default=None,
+    help="Use a bundled example template (sets base-harness + task-dir automatically).",
+)
+def init(
+    agent: str,
+    workspace: str,
+    task_dir: str | None,
+    eval_script: str | None,
+    base_harness: str | None,
+    template: str | None,
+):
     """Initialize an optimization workspace for the given agent."""
     from polyharness.workspace import Workspace
 
     ws = Workspace.init(
         root=workspace,
         agent_backend=agent,
+        template=template,
         task_dir=task_dir,
         eval_script=eval_script,
         base_harness=base_harness,
     )
     console.print(f"Initialized workspace at [bold]{ws.root}[/bold]")
     console.print(f"  Agent backend: {agent}")
+    if template:
+        console.print(f"  Template:      {template}")
     if base_harness:
         console.print(f"  Base harness:  copied from {base_harness}")
     if task_dir:
@@ -1209,3 +1344,57 @@ def _print_diff(diff_lines: list[str]) -> None:
             console.print(f"[red]{line}[/red]")
         else:
             console.print(line)
+
+
+@main.command()
+def upgrade():
+    """Upgrade PolyHarness to the latest version."""
+    import subprocess
+    import sys
+
+    console.print(f"Current version: [bold]{__version__}[/bold]")
+    console.print("Checking for updates...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--upgrade", "polyharness"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        # Re-check version after upgrade
+        check = subprocess.run(
+            [sys.executable, "-c", "import polyharness; print(polyharness.__version__)"],
+            capture_output=True,
+            text=True,
+        )
+        new_version = check.stdout.strip() if check.returncode == 0 else "unknown"
+        if new_version == __version__:
+            console.print(f"[green]Already up to date ({__version__}).[/green]")
+        else:
+            console.print(f"[green]Upgraded: {__version__} → {new_version}[/green]")
+    else:
+        console.print(f"[red]Upgrade failed:[/red] {result.stderr.strip()}")
+        raise SystemExit(1)
+
+
+@main.command()
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompt.")
+def uninstall(yes: bool):
+    """Uninstall PolyHarness from the current environment."""
+    import subprocess
+    import sys
+
+    if not yes:
+        click.confirm("This will uninstall polyharness. Continue?", abort=True)
+
+    console.print("Uninstalling polyharness...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "uninstall", "polyharness", "-y"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        console.print("[green]PolyHarness has been uninstalled.[/green]")
+        console.print("To reinstall: [bold]pip install polyharness[/bold]")
+    else:
+        console.print(f"[red]Uninstall failed:[/red] {result.stderr.strip()}")
+        raise SystemExit(1)

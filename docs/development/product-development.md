@@ -72,8 +72,8 @@ PolyHarness 编排器
 │                     产品定位矩阵                           │
 │                                                          │
 │  高                                                      │
-│  ↑        ┌──────────────┐                               │
-│  自       │ Meta-Harness │ ← 论文（闭源搜索框架）            │
+│  ↑        ┌──────────────┐                               │ 
+│  自       │ Meta-Harness │ ← 论文（闭源搜索框架）           │
 │  动       │  (Stanford)  │                               │
 │  化   ┌───┴──────────────┴───┐                           │
 │  程   │  PolyHarness         │ ← 智能体生态的优化层         │
@@ -177,7 +177,7 @@ PolyHarness 编排器
 | 编排器主循环 | `orchestrator.py` | 完整 propose → evaluate → store 循环 |
 | Proposer prompt 设计 | `proposer_prompt.md` | Proposer 能诊断历史失败并提出改进 |
 | 评估器接口 | `evaluator.py` 抽象基类 + Python 函数评估器 | 用户可定义评分函数 |
-| 示例任务 | `examples/text-classification/` | 端到端运行一个 toy 任务 |
+| 示例任务 | `src/polyharness/templates/text-classification/` | 端到端运行一个 toy 任务 |
 | CLI 入口 | `ph run` | 一条命令启动搜索 |
 
 **MVP 验收目标**：在 toy 文本分类任务上，10 轮搜索内至少出现一个评估分数高于初始 harness 的候选。该目标用于阶段验收，不表示对任意任务都保证改进。

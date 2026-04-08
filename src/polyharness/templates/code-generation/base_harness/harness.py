@@ -4,9 +4,8 @@ Given a natural-language description, generate a Python function body.
 This is intentionally simplistic to give the Proposer room to improve.
 """
 
-import re
-import sys
 import json
+import sys
 
 
 def generate(description: str) -> str:

@@ -4,9 +4,8 @@ Given a question and a knowledge base of documents, retrieve the most relevant
 document and extract the answer. Intentionally simplistic.
 """
 
-import sys
 import json
-
+import sys
 
 # Built-in knowledge base (loaded at import time or overridden via set_knowledge_base)
 _KNOWLEDGE_BASE = []
