@@ -20,6 +20,9 @@
 
 ---
 
+> **What is a "harness"?**
+> A harness is the code that wraps your AI agent's interaction with a task — including the prompt template, tool configuration, output parsing logic, and any pre/post-processing steps. It's the *how* your agent solves a problem, not the model itself. PolyHarness iteratively searches for better harness configurations so you don't have to tune them by hand.
+
 Your AI agent runs the same harness every time. Same prompts, same tool config, same strategy — no matter how many times it fails.
 
 **PolyHarness addresses that.** It records each iteration, evaluates candidate harness changes, and uses the accumulated history to search for better-scoring configurations. You run one command to start the loop.
@@ -129,10 +132,24 @@ This auto-detects which agent backends (Claude Code, Codex, etc.) are installed 
 ### 3. Initialize a workspace
 
 ```bash
-ph init --agent claude-code         --base-harness ./my_harness/         --task-dir ./my_tasks/         --eval-script ./evaluate.py
+ph init \
+  --agent claude-code \
+  --base-harness ./my_harness/ \
+  --task-dir ./my_tasks/ \
+  --eval-script ./evaluate.py
 ```
 
 This copies your harness code, test cases, and evaluation script into an isolated **optimization workspace** (by default `.ph_workspace` in the current directory, or the folder specified by `--workspace`).
+
+#### What you need to prepare
+
+| Item | What it is | Example |
+|------|-----------|---------|
+| **base-harness/** | A directory with your starting harness code. Must contain at least one entry file (default: `harness.py`). This is the code PolyHarness will iteratively optimize. | A Python file with a `classify(text)` or `solve(question)` function |
+| **tasks/** | A directory with `test_cases.json` — a JSON array of test inputs and expected outputs. Each item should have an `"input"` and `"expected"` field. | `[{"input": "2+3", "expected": "5"}, ...]` |
+| **evaluate.py** | A script that runs the harness against each task and outputs a JSON score. Must print `{"overall_score": 0.85, "task_scores": {...}}` to stdout. | See any `examples/*/evaluate.py` for a working template |
+
+> **Tip:** If you're unsure about the format, start with one of the bundled `examples/` directories — each one is a complete, working template you can copy and adapt.
 
 **Configure Your Agent**
 
@@ -141,7 +158,8 @@ PolyHarness automatically sandboxes your agent inside this workspace, ensuring i
 | Scenario | How to configure |
 |----------|------------------|
 | **Supported CLI Tools** | Run `ph init --agent <name>`. PolyHarness auto-injects required instructions (e.g., `CLAUDE.md`).<br>*(Supported: claude-code, claw-code, codex, opencode)* |
-| **API / LLM Directly** | Run `ph init --agent api`. No CLI tool required, just run `export OPENAI_API_KEY="sk-..."` before `ph run`. |
+| **Anthropic API** | Run `ph init --agent api`. Set `export ANTHROPIC_API_KEY="sk-ant-..."` before `ph run`. |
+| **OpenAI / Local Models** | Run `ph init --agent openai`. Then configure the endpoint — see [Local Model Setup](#local-model-setup) below. |
 | **Custom CLI path** | If your CLI agent uses a non-standard command, edit `config.yaml` in the workspace before running:<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }`|
 
 ### 4. Run the optimization loop
@@ -253,6 +271,82 @@ The Proposer reads **all of this** before generating the next candidate. It can 
 `ph doctor` auto-detects all available backends and shows their status.
 
 When you run `ph init --agent claude-code`, PolyHarness automatically generates a `CLAUDE.md` instruction file in the workspace, telling the agent how to behave as an optimization Proposer. Same for `CLAW.md`, `CODEX.md`, `OPENCODE.md` — each agent's native instruction format.
+
+### Local Model Setup
+
+If you're running a local model (Ollama, vLLM, LM Studio, or any OpenAI-compatible server), use the `openai` backend:
+
+```bash
+# 1. Initialize
+ph init --agent openai \
+  --base-harness ./my_harness/ \
+  --task-dir ./my_tasks/
+
+# 2. Configure your local endpoint
+ph config set proposer.model llama3.3
+ph config set proposer.base_url http://localhost:11434/v1
+ph config set proposer.api_key sk-dummy
+
+# 3. Run
+ph run
+```
+
+Or edit `.ph_workspace/config.yaml` directly:
+
+```yaml
+proposer:
+  backend: openai
+  model: llama3.3                          # your local model name
+  base_url: http://localhost:11434/v1      # Ollama default
+  api_key: sk-dummy                        # local models don't need a real key
+  max_tokens: 16384
+  temperature: 0.7
+```
+
+Common local endpoints:
+
+| Tool | `base_url` |
+|------|-----------|
+| Ollama | `http://localhost:11434/v1` |
+| vLLM | `http://localhost:8000/v1` |
+| LM Studio | `http://localhost:1234/v1` |
+| LocalAI | `http://localhost:8080/v1` |
+
+---
+
+## Configuration Reference
+
+After `ph init`, the workspace has a `config.yaml` with these sections:
+
+```yaml
+search:
+  max_iterations: 20          # Maximum search iterations
+  early_stop_patience: 5      # Stop after N iterations with no improvement
+  parent_selection: best       # Strategy: best | tournament | all
+
+proposer:
+  backend: api                 # api | openai | claude-code | claw-code | codex | opencode | local
+  model: claude-sonnet-4-20250514  # Model name (for api/openai backends)
+  base_url: null               # Custom API endpoint (for openai backend)
+  api_key: null                # API key override (null = use env var)
+  max_tokens: 16384            # Max output tokens per proposer turn
+  temperature: 0.7             # Sampling temperature (0.0 – 2.0)
+  cli_path: null               # Custom CLI executable path (auto-detect if null)
+
+evaluator:
+  type: python                 # python | docker | custom
+  entry: evaluate.py           # Evaluator script entrypoint
+  timeout: 300                 # Per-task timeout in seconds
+
+harness:
+  language: python             # Harness code language
+  entry: harness.py            # Harness entrypoint file
+  editable_files:              # Files the Proposer is allowed to modify
+    - harness.py
+    - prompt_template.txt
+```
+
+You can modify values via CLI: `ph config set search.max_iterations 30`
 
 ---
 
