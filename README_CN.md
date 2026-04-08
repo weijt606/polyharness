@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-121%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-161%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -34,6 +34,7 @@
 | **完整历史** | 每轮迭代的代码、分数、执行轨迹完整保留。Meta-Harness 论文报告非马尔可夫搜索优于盲目重试。 |
 | **搜索树** | 可视化优化路径，对比任意两个候选的逐任务差异。 |
 | **一条命令完成初始化** | `ph init --base-harness ... --task-dir ...`，复制文件、配置 workspace，一步完成。 |
+| **在线进化** | `ph wrap` 记录每次 agent 调用。当 traces 积累足够多后，`ph evolve` 会触发一轮轻量搜索循环——agent 在你工作的同时持续改进。 |
 | **闭环流程** | init → run → inspect → apply。由你决定何时把当前最佳候选回写到项目。 |
 
 ---
@@ -408,6 +409,18 @@ harness:
   editable_files:              # Proposer 可修改的文件列表
     - harness.py
     - prompt_template.txt
+
+evolution:
+  mode: online                 # batch | online
+  trigger:
+    strategy: accumulate        # degradation | accumulate | cron | manual
+    accumulate_count: 10        # 每积累 N 条新 trace 触发进化
+    min_samples: 5              # 进化前最少 trace 数
+    window_size: 20             # 分数分析滑动窗口大小
+    threshold: 0.05             # 触发 degradation 策略的分数下降阈值
+  auto_apply: false             # 自动应用改进后的 harness
+  max_iterations: 3             # 每轮进化的迭代次数
+  record_output: true           # 在 trace 中捕获 stdout/stderr
 ```
 
 也可通过 CLI 修改配置：`ph config set search.max_iterations 30`
@@ -468,6 +481,12 @@ python -m polyharness --version
 | `ph clean` | 清理候选目录释放磁盘空间（`--keep-best`、`-y`） |
 | `ph config show` | 显示当前 workspace 配置 |
 | `ph config set K V` | 用 dot-notation 修改配置值，并进行校验 |
+| `ph wrap <cmd> [args]` | 透明转发命令，记录执行 trace（耗时、退出码、输出） |
+| `ph traces list` | 以表格列出已收集的 traces（`-n` 限制数量） |
+| `ph traces show <id>` | 展示 trace 完整详情，包括捕获的输出 |
+| `ph traces stats` | 汇总统计：总 traces 数、已评分数、各 agent 分布 |
+| `ph traces clear` | 清除已收集的 traces（`--keep N` 保留最新、`-y` 跳过确认） |
+| `ph evolve` | 基于已收集的 traces 触发一轮在线进化循环 |
 | `ph upgrade` | 升级 PolyHarness 到最新版本 |
 | `ph uninstall` | 卸载 PolyHarness（`-y` 跳过确认） |
 
@@ -496,6 +515,22 @@ python -m polyharness --version
 --resume             从上次中断处继续搜索
 --backend <name>     覆盖 proposer 后端，无需修改配置
 --strategy <name>    覆盖父候选选择策略: best | tournament | all
+```
+
+### `ph wrap` 选项
+
+```
+--workspace PATH     将 trace 关联到指定 workspace
+--store PATH         自定义 trace 存储目录
+--no-record-output   不捕获 stdout/stderr（仅记录元数据）
+```
+
+### `ph evolve` 选项
+
+```
+--workspace PATH          待进化的 workspace（默认 .ph_workspace）
+--store PATH              自定义 trace 存储目录
+--max-iterations INTEGER  覆盖本轮进化的最大迭代数
 ```
 
 ---
@@ -555,12 +590,48 @@ ph run --max-iterations 5
 
 ---
 
+## 在线自我进化（v0.2.0）
+
+除了批量优化（`ph run`），PolyHarness 还能在**你日常使用 agent 的过程中**持续改进 harness。
+
+### 工作原理
+
+1. **包裹你的 agent** — `ph wrap` 透明转发任意命令，同时记录执行 trace（耗时、退出码、输出）。
+2. **Traces 持续积累** — 每次调用的元数据存储在 `~/.polyharness/traces/` 中。
+3. **触发进化** — 当数据足够多时，`ph evolve` 以 traces 为上下文运行一轮轻量搜索循环。
+
+```bash
+# 1. 包裹你的 agent（正常使用，输出原样透传）
+ph wrap claude -p "修复 auth.py 中的登录 bug"
+ph wrap claude -p "给 parser 添加单元测试"
+
+# 2. 查看收集情况
+ph traces list
+ph traces stats
+
+# 3. 基于真实使用模式进化 harness
+ph evolve --workspace .ph_workspace --max-iterations 3
+```
+
+Agent 的输出始终透明转发 — `ph wrap` 对你的工作流完全无感，只多了 trace 记录。
+
+```bash
+# Trace 管理
+ph traces list              # 最近 traces 表格
+ph traces show <id>         # 完整详情 + 捕获的输出
+ph traces stats             # 汇总：总数、已评分、各 agent 分布
+ph traces clear --keep 50   # 清理旧 traces，保留最新 50 条
+```
+
+---
+
 ## 项目结构
 
 ```
 src/polyharness/
-├── cli.py                   # Click CLI —— 16 个命令/子命令
-├── config.py                # Pydantic 配置模型
+├── cli.py                   # Click CLI —— 22 个命令/子命令
+├── config.py                # Pydantic 配置模型（+ EvolutionConfig）
+├── collector.py             # 在线进化 trace 收集器
 ├── orchestrator.py          # Meta-Harness 搜索循环 + 进度条 + 错误恢复
 ├── workspace.py             # 文件系统 workspace + agent 指令注入
 ├── search_log.py            # JSONL 追加式搜索日志
@@ -581,7 +652,7 @@ bin/
 ├── ph.mjs                   # npm 包装器
 └── postinstall.mjs          # npm postinstall
 
-tests/                       # 128 个测试（pytest）
+tests/                       # 161 个测试（pytest）
 ```
 
 ## 本地开发

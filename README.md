@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-121%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-161%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -34,6 +34,7 @@ Your AI agent runs the same harness every time. Same prompts, same tool config, 
 | **Full History** | Every iteration's code, scores, and traces preserved. The Meta-Harness paper reports that non-Markovian search outperforms blind retries. |
 | **Search Tree** | Visualize the optimization path. Compare any two candidates with per-task diffs. |
 | **One-Command Setup** | `ph init --base-harness ... --task-dir ...` — copies files, configures workspace, done. |
+| **Online Evolution** | `ph wrap` records every agent invocation. When enough traces accumulate, `ph evolve` triggers a lightweight search cycle — your agent improves while you work. |
 | **Closed Loop** | init → run → inspect → apply. You choose when to write the best-scoring candidate back to your project. |
 
 ---
@@ -408,6 +409,18 @@ harness:
   editable_files:              # Files the Proposer is allowed to modify
     - harness.py
     - prompt_template.txt
+
+evolution:
+  mode: online                 # batch | online
+  trigger:
+    strategy: accumulate        # degradation | accumulate | cron | manual
+    accumulate_count: 10        # Trigger after N new traces
+    min_samples: 5              # Minimum traces before evolution
+    window_size: 20             # Sliding window for score analysis
+    threshold: 0.05             # Score drop that triggers degradation strategy
+  auto_apply: false             # Automatically apply improved harness
+  max_iterations: 3             # Iterations per evolution cycle
+  record_output: true           # Capture stdout/stderr in traces
 ```
 
 You can modify values via CLI: `ph config set search.max_iterations 30`
@@ -468,6 +481,12 @@ python -m polyharness --version
 | `ph clean` | Remove candidate dirs to free disk space (`--keep-best`, `-y`) |
 | `ph config show` | Display the current workspace configuration |
 | `ph config set K V` | Modify a config value via dot-notation (with validation) |
+| `ph wrap <cmd> [args]` | Transparently forward a command, record execution trace (duration, exit code, output) |
+| `ph traces list` | List collected traces in a table (`-n` to limit) |
+| `ph traces show <id>` | Show full detail of a trace including captured output |
+| `ph traces stats` | Summary statistics: total traces, scored count, agent distribution |
+| `ph traces clear` | Remove collected traces (`--keep N` to retain newest, `-y` to skip confirm) |
+| `ph evolve` | Trigger an online evolution cycle using collected traces as context |
 | `ph upgrade` | Upgrade PolyHarness to the latest version |
 | `ph uninstall` | Uninstall PolyHarness from the current environment (`-y` to skip confirm) |
 
@@ -496,6 +515,22 @@ python -m polyharness --version
 --resume             Continue an interrupted search from where it left off
 --backend <name>     Override proposer backend without editing config
 --strategy <name>    Override parent selection: best | tournament | all
+```
+
+### `ph wrap` options
+
+```
+--workspace PATH     Associate trace with a workspace
+--store PATH         Custom trace store directory
+--no-record-output   Don't capture stdout/stderr (record metadata only)
+```
+
+### `ph evolve` options
+
+```
+--workspace PATH          Workspace to evolve (default: .ph_workspace)
+--store PATH              Custom trace store directory
+--max-iterations INTEGER  Override max iterations for this cycle
 ```
 
 ---
@@ -555,12 +590,48 @@ ph run --max-iterations 5
 
 ---
 
+## Online Self-Evolution (v0.2.0)
+
+Beyond batch optimization (`ph run`), PolyHarness can improve your agent's harness **while you work**.
+
+### How it works
+
+1. **Wrap your agent** — `ph wrap` transparently forwards any command while recording execution traces (duration, exit code, output).
+2. **Traces accumulate** — each invocation is stored with metadata in `~/.polyharness/traces/`.
+3. **Trigger evolution** — when enough data is collected, `ph evolve` runs a lightweight search cycle using the traces as context.
+
+```bash
+# 1. Wrap your agent (use it normally — output passes through)
+ph wrap claude -p "Fix the login bug in auth.py"
+ph wrap claude -p "Add unit tests for the parser"
+
+# 2. Check what's been collected
+ph traces list
+ph traces stats
+
+# 3. Evolve the harness based on real usage patterns
+ph evolve --workspace .ph_workspace --max-iterations 3
+```
+
+The agent's output is always forwarded transparently — `ph wrap` is invisible to your workflow except for the trace recording.
+
+```bash
+# Traces management
+ph traces list              # table of recent traces
+ph traces show <id>         # full detail + captured output
+ph traces stats             # summary: total, scored, per-agent breakdown
+ph traces clear --keep 50   # prune old traces, keep newest 50
+```
+
+---
+
 ## Project Structure
 
 ```
 src/polyharness/
-├── cli.py                   # Click CLI — 16 commands/subcommands
-├── config.py                # Pydantic config models
+├── cli.py                   # Click CLI — 22 commands/subcommands
+├── config.py                # Pydantic config models (+ EvolutionConfig)
+├── collector.py             # Trace collector for online evolution
 ├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery
 ├── workspace.py             # Filesystem workspace + agent instruction injection
 ├── search_log.py            # JSONL append-only search log
@@ -581,7 +652,7 @@ bin/
 ├── ph.mjs                   # npm wrapper
 └── postinstall.mjs          # npm postinstall
 
-tests/                       # 128 tests (pytest)
+tests/                       # 161 tests (pytest)
 ```
 
 ## Local Development
