@@ -243,6 +243,7 @@ The Proposer reads **all of this** before generating the next candidate. It can 
 | Backend | Command | Use case |
 |---------|---------|----------|
 | `api` | — | Default. Anthropic API direct, just needs `ANTHROPIC_API_KEY` |
+| `openai` | — | OpenAI-compatible API (Ollama, vLLM, LM Studio, etc). Needs `OPENAI_API_KEY` |
 | `claude-code` | `claude -p` | Official Claude Code CLI (Pro/Teams subscription) |
 | `claw-code` | `claw -p` | Open-source Claw Code CLI |
 | `codex` | `codex --quiet` | OpenAI Codex CLI |

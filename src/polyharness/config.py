@@ -24,11 +24,17 @@ class SearchConfig(BaseModel):
 class ProposerConfig(BaseModel):
     """Proposer agent configuration."""
 
-    backend: Literal["api", "claude-code", "claw-code", "codex", "opencode", "local"] = Field(
+    backend: Literal["api", "openai", "claude-code", "claw-code", "codex", "opencode", "local"] = Field(
         default="api", description="Proposer backend type."
     )
     model: str = Field(
         default="claude-sonnet-4-20250514", description="Model for the Proposer agent."
+    )
+    base_url: str | None = Field(
+        default=None, description="Optional base URL for the API (useful for local models)."
+    )
+    api_key: str | None = Field(
+        default=None, description="Optional API key (if None, reads from environment variables)."
     )
     max_tokens: int = Field(default=16384, ge=1, description="Max output tokens per turn.")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature.")

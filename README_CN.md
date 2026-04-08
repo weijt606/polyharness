@@ -243,6 +243,7 @@ Proposer 在生成下一个候选之前会读取**所有这些信息**。它能�
 | 后端 | 命令 | 适用场景 |
 |------|------|----------|
 | `api` | — | 默认。Anthropic API 直连，只需 `ANTHROPIC_API_KEY` |
+| `openai` | — | 兼容 OpenAI 格式的本地/云端模型直连 (Ollama, vLLM, LM Studio 等)，需配置 `OPENAI_API_KEY` |
 | `claude-code` | `claude -p` | 官方 Claude Code CLI（Pro/Teams 订阅） |
 | `claw-code` | `claw -p` | 开源 Claw Code CLI |
 | `codex` | `codex --quiet` | OpenAI Codex CLI |
