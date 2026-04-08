@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-165%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -242,6 +242,34 @@ ph run
 
 编排器会执行这样一个循环：复制你的 harness → 让 Proposer agent 提出候选修改 → 评估结果 → 存储一切 → 重复。
 
+```
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│    你                             PolyHarness                │
+│    │                              │                          │
+│    ├── ph init ──────────────────→│ 创建 workspace           │
+│    │   (harness + tasks + eval)   │ 复制文件                  │
+│    │                              │ 注入 CLAUDE.md           │
+│    │                              │                          │
+│    ├── ph run ───────────────────→│ 启动搜索循环：             │
+│    │                              │                          │
+│    │   ┌──────────────────────────┤                          │
+│    │   │  步骤 1: 选择父候选        │ 最优或 Tournament         │
+│    │   │  步骤 2: 复制 harness     │ 从父候选 → 新候选           │
+│    │   │  步骤 3: 提议改进          │ Agent 读取全部历史         │
+│    │   │  步骤 4: 评估             │ 运行任务，计算分数          │
+│    │   │  步骤 5: 存储结果          │ 代码 + 分数 + 轨迹         │
+│    │   │  步骤 6: 检查停止条件       │ 有改进？还有耐心？          │
+│    │   └──────────┬───────────────┤                          │
+│    │              └── 循环 ───────┘                           │
+│    │                              │                          │
+│    ├── ph log ───────────────────→│ 展示搜索树                 │
+│    ├── ph compare 0 5  ──────────→│ 分数差异 + 代码 diff       │
+│    └── ph apply ─────────────────→│ 回写最优结果               │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
 ### 5. 查看和应用
 
 ```bash
@@ -325,7 +353,66 @@ ph evolve                      # 手动触发进化
 
 > **提示：** 如果不想保存 stdout/stderr（例如敏感输出），使用 `--no-record-output`。元数据始终会记录。
 
-> **提示：** 可以设置 shell alias 进一步简化输入：`alias cc="ph wrap --auto-evolve claude"`
+#### 零配置自动包裹：`ph shell-hook`
+
+不想每次都输入 `ph wrap --auto-evolve`？安装 shell 钩子即可自动拦截 agent 命令：
+
+```bash
+ph shell-hook install          # 一次性设置，写入 ~/.zshrc
+```
+
+之后正常使用 agent 即可：
+
+```bash
+claude -p "把 auth 重构为 JWT"            # 自动变为：ph wrap --auto-evolve claude -p ...
+claw -p "写支付测试"                  # 同理——自动包裹
+codex "加重试逻辑"                     # 同理
+opencode -p "修复不稳定测试"            # 同理
+```
+
+原理：shell 的 `preexec` 钩子检测到 `claude`/`claw`/`codex`/`opencode` 命令后，透明地通过 `ph wrap --auto-evolve` 转发。你的输出不会变。
+
+```bash
+ph shell-hook status           # 查看是否已安装
+ph shell-hook uninstall        # 干净移除（恢复原始 rc 文件）
+```
+
+#### 自动进化流程
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│   你                             PolyHarness                 │
+│   │                              │                           │
+│   ├── ph shell-hook install ────→│ 注入 preexec 钩子          │
+│   │   （一次性设置）                │ 到 ~/.zshrc               │
+│   │                              │                           │
+│   ├── claude -p "修复 bug" ────→  │ Shell 钩子拦截             │
+│   │   （正常使用）                 │                           │
+│   │                              ├── 运行 agent               │
+│   │   ┌─ 输出原样透传 ─────────────┤                           │
+│   │   │                          ├── 记录 trace               │
+│   │   │                          │   (~/.polyharness/        │
+│   │   │                          │    traces/)               │
+│   │   │                          │                           │
+│   │   │                          ├── 检查阈值                 │
+│   │   │                          │   traces < 50?            │
+│   │   │                          │   ├─ 是: "7/50 traces"    │
+│   │   │                          │   └─ 否: 触发 ─────┐       │
+│   │   │                          │                   │       │
+│   │   │                          │   ┌───────────────┘       │
+│   │   │                          │   │ 进化循环               │
+│   │   │                          │   │（等同 ph run）         │
+│   │   │                          │   │ 提议 → 评估            │
+│   │   │                          │   │ → 存储 → 重复          │
+│   │   │                          │   └──────────────────     │
+│   │   │                          │                           │
+│   └───┘                          │                           │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+核心区别：**你不需要手动执行 `ph run`。**像往常一样使用 agent；PolyHarness 静默收集数据，当积累足够信号时自动触发进化。
 
 ### 立即体验（无需 API key）
 
@@ -347,35 +434,7 @@ ph log
 
 ## 工作原理
 
-PolyHarness 运行的是一个 **Meta-Harness 风格的搜索循环**，即让 AI agent 逐轮提出、评估并记录 harness 变更的迭代过程：
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                                                              │
-│    你                             PolyHarness                │
-│    │                              │                          │
-│    ├── ph init ──────────────────→│ 创建 workspace           │
-│    │   (harness + tasks + eval)   │ 复制文件                  │
-│    │                              │ 注入 CLAUDE.md           │
-│    │                              │                          │
-│    ├── ph run ───────────────────→│ 启动搜索循环：             │
-│    │                              │                          │
-│    │   ┌──────────────────────────┤                          │
-│    │   │  步骤 1: 选择父候选        │ 最优或 Tournament         │
-│    │   │  步骤 2: 复制 harness     │ 从父候选 → 新候选           │
-│    │   │  步骤 3: 提议改进          │ Agent 读取全部历史         │
-│    │   │  步骤 4: 评估             │ 运行任务，计算分数          │
-│    │   │  步骤 5: 存储结果          │ 代码 + 分数 + 轨迹         │
-│    │   │  步骤 6: 检查停止条件       │ 有改进？还有耐心？          │
-│    │   └──────────┬───────────────┤                          │
-│    │              └── 循环 ───────┘                           │
-│    │                              │                          │
-│    ├── ph log ───────────────────→│ 展示搜索树                 │
-│    ├── ph compare 0 5  ──────────→│ 分数差异 + 代码 diff       │
-│    └── ph apply ─────────────────→│ 回写最优结果               │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
+PolyHarness 运行的是一个 **Meta-Harness 风格的搜索循环**，即让 AI agent 逐轮提出、评估并记录 harness 变更的迭代过程。详细流程图见上方 [步骤 4](#4-运行优化循环) 和 [步骤 6](#6-自动进化)。
 
 ### 为什么有效：非马尔可夫搜索
 
@@ -555,6 +614,9 @@ python -m polyharness --version
 | `ph traces stats` | 汇总统计：总 traces 数、已评分数、各 agent 分布 |
 | `ph traces clear` | 清除已收集的 traces（`--keep N` 保留最新、`-y` 跳过确认） |
 | `ph evolve` | 基于已收集的 traces 触发一轮在线进化循环 |
+| `ph shell-hook install` | 安装 shell 钩子，自动包裹 agent 命令（claude、claw、codex、opencode） |
+| `ph shell-hook uninstall` | 从 rc 文件中移除 shell 钩子 |
+| `ph shell-hook status` | 检查 shell 钩子是否已安装 |
 | `ph upgrade` | 升级 PolyHarness 到最新版本 |
 | `ph uninstall` | 卸载 PolyHarness（`-y` 跳过确认） |
 
@@ -664,7 +726,7 @@ ph run --max-iterations 5
 ```
 polyharness/
 ├── src/polyharness/
-│   ├── cli.py                   # Click CLI —— 22 个命令/子命令
+│   ├── cli.py                   # Click CLI —— 25 个命令/子命令
 │   ├── config.py                # Pydantic 配置模型（+ EvolutionConfig）
 │   ├── collector.py             # 在线进化 trace 收集器
 │   ├── orchestrator.py          # Meta-Harness 搜索循环 + 进度条 + 错误恢复
@@ -689,7 +751,7 @@ polyharness/
 │       ├── code-generation/
 │       ├── rag-qa/
 │       └── api-calling/
-├── tests/                       # 165 个测试（pytest）
+├── tests/                       # 173 个测试（pytest）
 ├── bin/                         # npm 包装器（ph.mjs、postinstall.mjs）
 ├── docs/
 │   ├── development/             # 产品路线图 & 技术架构

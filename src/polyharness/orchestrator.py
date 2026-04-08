@@ -154,6 +154,12 @@ class Orchestrator:
                         parent=parent,
                     )
 
+                    # Step 3.5: Verify proposer produced a harness file
+                    if not (cand_dir / "harness.py").exists():
+                        raise FileNotFoundError(
+                            f"Proposer did not generate harness.py in iter_{i}"
+                        )
+
                     # Step 4: Evaluate
                     score = self._evaluate_iteration(i)
                 except Exception as exc:
