@@ -289,3 +289,82 @@ class TestEvolutionConfig:
         assert loaded.evolution.mode == "online"
         assert loaded.evolution.trigger.strategy == "degradation"
         assert loaded.evolution.max_iterations == 3
+
+
+# ---------------------------------------------------------------------------
+# ph shell-hook
+# ---------------------------------------------------------------------------
+
+
+class TestShellHook:
+    def test_shell_hook_help(self, runner: CliRunner):
+        result = runner.invoke(main, ["shell-hook", "--help"])
+        assert result.exit_code == 0
+        assert "auto-wrap" in result.output.lower()
+
+    def test_install_creates_hook(self, runner: CliRunner, tmp_path: Path):
+        rc = tmp_path / ".zshrc"
+        rc.write_text("# existing config\n")
+        result = runner.invoke(main, ["shell-hook", "install", "--rc", str(rc)])
+        assert result.exit_code == 0
+        assert "installed" in result.output.lower()
+        content = rc.read_text()
+        assert "polyharness shell-hook" in content
+        assert "_ph_preexec" in content
+
+    def test_install_idempotent(self, runner: CliRunner, tmp_path: Path):
+        rc = tmp_path / ".zshrc"
+        rc.write_text("# existing config\n")
+        runner.invoke(main, ["shell-hook", "install", "--rc", str(rc)])
+        result = runner.invoke(main, ["shell-hook", "install", "--rc", str(rc)])
+        assert result.exit_code == 0
+        assert "already installed" in result.output.lower()
+        # Should only appear once
+        content = rc.read_text()
+        assert content.count("polyharness shell-hook") == 2  # start + end markers
+
+    def test_uninstall_removes_hook(self, runner: CliRunner, tmp_path: Path):
+        rc = tmp_path / ".zshrc"
+        rc.write_text("# existing config\n")
+        runner.invoke(main, ["shell-hook", "install", "--rc", str(rc)])
+        result = runner.invoke(main, ["shell-hook", "uninstall", "--rc", str(rc)])
+        assert result.exit_code == 0
+        assert "removed" in result.output.lower()
+        content = rc.read_text()
+        assert "polyharness shell-hook" not in content
+
+    def test_uninstall_no_hook(self, runner: CliRunner, tmp_path: Path):
+        rc = tmp_path / ".zshrc"
+        rc.write_text("# clean config\n")
+        result = runner.invoke(main, ["shell-hook", "uninstall", "--rc", str(rc)])
+        assert result.exit_code == 0
+        assert "no hook found" in result.output.lower()
+
+    def test_status_not_installed(self, runner: CliRunner, tmp_path: Path):
+        rc = tmp_path / ".zshrc"
+        rc.write_text("# clean\n")
+        result = runner.invoke(main, ["shell-hook", "status", "--rc", str(rc)])
+        assert result.exit_code == 0
+        assert "not installed" in result.output.lower()
+
+    def test_status_installed(self, runner: CliRunner, tmp_path: Path):
+        rc = tmp_path / ".zshrc"
+        rc.write_text("# existing\n")
+        runner.invoke(main, ["shell-hook", "install", "--rc", str(rc)])
+        result = runner.invoke(main, ["shell-hook", "status", "--rc", str(rc)])
+        assert result.exit_code == 0
+        assert "installed" in result.output.lower()
+        assert "claude" in result.output.lower()
+
+    def test_uninstall_preserves_surrounding(self, runner: CliRunner, tmp_path: Path):
+        rc = tmp_path / ".zshrc"
+        rc.write_text("# before\nexport FOO=1\n")
+        runner.invoke(main, ["shell-hook", "install", "--rc", str(rc)])
+        # Add content after the hook
+        with open(rc, "a") as f:
+            f.write("# after\nexport BAR=2\n")
+        runner.invoke(main, ["shell-hook", "uninstall", "--rc", str(rc)])
+        content = rc.read_text()
+        assert "FOO=1" in content
+        assert "BAR=2" in content
+        assert "polyharness" not in content

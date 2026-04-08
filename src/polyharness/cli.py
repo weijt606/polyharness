@@ -1775,3 +1775,150 @@ def evolve(workspace: str, store: str | None, max_iterations: int | None):
         console.print("Run [bold]ph apply[/bold] to use the improved harness.")
     else:
         console.print("[yellow]No improvement found in this evolution cycle.[/yellow]")
+
+
+# ---------------------------------------------------------------------------
+# ph shell-hook — auto-wrap agent commands via shell preexec hook
+# ---------------------------------------------------------------------------
+
+_HOOK_MARKER_START = "# >>> polyharness shell-hook >>>"
+_HOOK_MARKER_END = "# <<< polyharness shell-hook <<<"
+
+_HOOK_SCRIPT = r'''# >>> polyharness shell-hook >>>
+# Auto-wrap agent commands with ph wrap --auto-evolve
+# Installed by: ph shell-hook install
+_ph_preexec() {
+  # Only intercept if ph is available
+  command -v ph >/dev/null 2>&1 || return
+  local cmd="$1"
+  case "$cmd" in
+    claude\ *|claw\ *|codex\ *|opencode\ *)
+      eval "ph wrap --auto-evolve $cmd"
+      # Return non-zero to prevent original command from running (zsh preexec)
+      return 1
+      ;;
+  esac
+}
+# Install into zsh preexec (works with or without oh-my-zsh)
+if [[ -n "$ZSH_VERSION" ]]; then
+  autoload -Uz add-zsh-hook 2>/dev/null
+  if typeset -f add-zsh-hook >/dev/null 2>&1; then
+    add-zsh-hook preexec _ph_preexec
+  else
+    preexec_functions+=(_ph_preexec)
+  fi
+fi
+# <<< polyharness shell-hook <<<
+'''
+
+
+def _detect_shell_rc() -> Path:
+    """Detect the user's shell rc file."""
+    import os
+
+    shell = os.environ.get("SHELL", "")
+    home = Path.home()
+    if "zsh" in shell:
+        return home / ".zshrc"
+    if "bash" in shell:
+        # Prefer .bash_profile on macOS, .bashrc on Linux
+        import platform
+
+        if platform.system() == "Darwin":
+            return home / ".bash_profile"
+        return home / ".bashrc"
+    # Fallback to .profile
+    return home / ".profile"
+
+
+def _hook_installed(rc_path: Path) -> bool:
+    """Check if the hook is already installed."""
+    if not rc_path.exists():
+        return False
+    content = rc_path.read_text()
+    return _HOOK_MARKER_START in content
+
+
+@main.group(name="shell-hook")
+def shell_hook():
+    """Manage shell auto-wrap hook for agent commands."""
+    pass
+
+
+@shell_hook.command()
+@click.option(
+    "--rc",
+    type=click.Path(),
+    default=None,
+    help="Shell rc file to modify (default: auto-detect).",
+)
+def install(rc: str | None):
+    """Install shell hook to auto-wrap agent commands.
+
+    Adds a preexec hook to your shell rc file so that commands like
+    `claude -p ...`, `claw -p ...`, `codex ...`, `opencode -p ...`
+    are automatically wrapped with `ph wrap --auto-evolve`.
+    """
+    rc_path = Path(rc) if rc else _detect_shell_rc()
+
+    if _hook_installed(rc_path):
+        console.print(f"[yellow]Hook already installed in {rc_path}[/yellow]")
+        return
+
+    # Append the hook script
+    with open(rc_path, "a") as f:
+        f.write("\n" + _HOOK_SCRIPT)
+
+    console.print(f"[green]Shell hook installed in {rc_path}[/green]")
+    console.print(f"Run [bold]source {rc_path}[/bold] or open a new terminal to activate.")
+    console.print()
+    console.print("Agent commands that will be auto-wrapped:")
+    console.print("  claude, claw, codex, opencode")
+    console.print()
+    console.print("To remove: [bold]ph shell-hook uninstall[/bold]")
+
+
+@shell_hook.command(name="uninstall")
+@click.option(
+    "--rc",
+    type=click.Path(),
+    default=None,
+    help="Shell rc file to modify (default: auto-detect).",
+)
+def hook_uninstall(rc: str | None):
+    """Remove the shell hook from your rc file."""
+    rc_path = Path(rc) if rc else _detect_shell_rc()
+
+    if not _hook_installed(rc_path):
+        console.print(f"[yellow]No hook found in {rc_path}[/yellow]")
+        return
+
+    content = rc_path.read_text()
+    # Remove everything between markers (inclusive), plus surrounding blank lines
+    import re
+
+    pattern = r"\n*# >>> polyharness shell-hook >>>.*?# <<< polyharness shell-hook <<<\n*"
+    cleaned = re.sub(pattern, "\n", content, flags=re.DOTALL)
+    rc_path.write_text(cleaned)
+
+    console.print(f"[green]Shell hook removed from {rc_path}[/green]")
+    console.print(f"Run [bold]source {rc_path}[/bold] or open a new terminal to apply.")
+
+
+@shell_hook.command(name="status")
+@click.option(
+    "--rc",
+    type=click.Path(),
+    default=None,
+    help="Shell rc file to check (default: auto-detect).",
+)
+def hook_status(rc: str | None):
+    """Check if the shell hook is installed."""
+    rc_path = Path(rc) if rc else _detect_shell_rc()
+
+    if _hook_installed(rc_path):
+        console.print(f"[green]Hook is installed in {rc_path}[/green]")
+        console.print("Auto-wrapped commands: claude, claw, codex, opencode")
+    else:
+        console.print(f"[yellow]Hook is not installed[/yellow] ({rc_path})")
+        console.print("Run [bold]ph shell-hook install[/bold] to set it up.")

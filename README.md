@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-165%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -242,6 +242,34 @@ ph run
 
 The orchestrator: copies your harness → asks the Proposer agent for a candidate change → evaluates the result → stores everything → repeats.
 
+```
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│   You                          PolyHarness                   │
+│    │                              │                          │
+│    ├── ph init ──────────────────→│ Creates workspace        │
+│    │   (harness + tasks + eval)   │ Copies files             │
+│    │                              │ Injects CLAUDE.md        │
+│    │                              │                          │
+│    ├── ph run ───────────────────→│ Starts search loop:      │
+│    │                              │                          │
+│    │   ┌──────────────────────────┤                          │
+│    │   │  Step 1: SELECT parent   │ Best or Tournament       │
+│    │   │  Step 2: COPY harness    │ From parent → candidate  │
+│    │   │  Step 3: PROPOSE changes │ Agent reads all history  │
+│    │   │  Step 4: EVALUATE        │ Run tasks, get scores    │
+│    │   │  Step 5: STORE results   │ Code + scores + traces   │
+│    │   │  Step 6: CHECK stopping  │ Improved? Patience left? │
+│    │   └──────────┬───────────────┤                          │
+│    │              └── loop ───────┘                          │
+│    │                              │                          │
+│    ├── ph log ───────────────────→│ Shows search tree        │
+│    ├── ph compare 0 5  ──────────→│ Score deltas + code diff │
+│    └── ph apply ─────────────────→│ Writes best back         │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
 ### 5. Inspect and apply
 
 ```bash
@@ -325,7 +353,66 @@ ph evolve                      # trigger evolution manually
 
 > **Tip:** Use `--no-record-output` if you don't want stdout/stderr saved (e.g., for sensitive output). Metadata is always recorded.
 
-> **Tip:** Create a shell alias for even less typing: `alias cc="ph wrap --auto-evolve claude"`
+#### Zero-config auto-wrap: `ph shell-hook`
+
+Don't want to type `ph wrap --auto-evolve` every time? Install a shell hook — it auto-intercepts agent commands:
+
+```bash
+ph shell-hook install          # one-time setup, writes to ~/.zshrc
+```
+
+After that, just use your agent as usual:
+
+```bash
+claude -p "Refactor auth to JWT"        # automatically becomes: ph wrap --auto-evolve claude -p ...
+claw -p "Write payment tests"            # same — auto-wrapped
+codex "Add retry logic"                  # same
+opencode -p "Fix flaky test"             # same
+```
+
+How it works: a `preexec` hook in your shell detects `claude`/`claw`/`codex`/`opencode` commands and transparently redirects them through `ph wrap --auto-evolve`. Your output is unchanged.
+
+```bash
+ph shell-hook status           # check if installed
+ph shell-hook uninstall        # remove cleanly (restores original rc file)
+```
+
+#### Auto-Evolution flow
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│  You                            PolyHarness                  │
+│   │                               │                          │
+│   ├── ph shell-hook install ────→ │ Injects preexec hook     │
+│   │   (one-time setup)            │ into ~/.zshrc            │
+│   │                               │                          │
+│   ├── claude -p "Fix bug" ──────→ │ Shell hook intercepts    │
+│   │   (normal usage)              │                          │
+│   │                               ├── Run agent              │
+│   │   ┌─ output passes through  ──┤                          │
+│   │   │                           ├── Record trace           │
+│   │   │                           │   (~/.polyharness/       │
+│   │   │                           │    traces/)              │
+│   │   │                           │                          │
+│   │   │                           ├── Check threshold        │
+│   │   │                           │   traces < 50?           │
+│   │   │                           │   ├─ Yes: "7/50 traces"  │
+│   │   │                           │   └─ No: trigger ───┐    │
+│   │   │                           │                     │    │
+│   │   │                           │   ┌─────────────────┘    │
+│   │   │                           │   │ Evolution cycle      │
+│   │   │                           │   │ (same as ph run)     │
+│   │   │                           │   │ Propose → Evaluate   │
+│   │   │                           │   │ → Store → Repeat     │
+│   │   │                           │   └──────────────────    │
+│   │   │                           │                          │
+│   └───┘                           │                          │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+The key difference: **you never run `ph run` manually.** You use your agent as always; PolyHarness silently collects data and triggers evolution when it has enough signal.
 
 ### Try it now (no API key needed)
 
@@ -347,35 +434,7 @@ The score path above is the current measured result of the bundled `math-word-pr
 
 ## How It Works
 
-PolyHarness runs a **Meta-Harness-style search loop** — an iterative process where an AI agent proposes, evaluates, and stores harness changes:
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                                                              │
-│   You                          PolyHarness                   │
-│    │                              │                          │
-│    ├── ph init ──────────────────→│ Creates workspace        │
-│    │   (harness + tasks + eval)   │ Copies files             │
-│    │                              │ Injects CLAUDE.md        │
-│    │                              │                          │
-│    ├── ph run ───────────────────→│ Starts search loop:      │
-│    │                              │                          │
-│    │   ┌──────────────────────────┤                          │
-│    │   │  Step 1: SELECT parent   │ Best or Tournament       │
-│    │   │  Step 2: COPY harness    │ From parent → candidate  │
-│    │   │  Step 3: PROPOSE changes │ Agent reads all history  │
-│    │   │  Step 4: EVALUATE        │ Run tasks, get scores    │
-│    │   │  Step 5: STORE results   │ Code + scores + traces   │
-│    │   │  Step 6: CHECK stopping  │ Improved? Patience left? │
-│    │   └──────────┬───────────────┤                          │
-│    │              └── loop ───────┘                          │
-│    │                              │                          │
-│    ├── ph log ───────────────────→│ Shows search tree        │
-│    ├── ph compare 0 5  ──────────→│ Score deltas + code diff │
-│    └── ph apply ─────────────────→│ Writes best back         │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
+PolyHarness runs a **Meta-Harness-style search loop** — an iterative process where an AI agent proposes, evaluates, and stores harness changes. See the detailed flow diagrams above in [Step 4](#4-run-the-optimization-loop) and [Step 6](#6-auto-evolution).
 
 ### Why it works: non-Markovian search
 
@@ -555,6 +614,9 @@ python -m polyharness --version
 | `ph traces stats` | Summary statistics: total traces, scored count, agent distribution |
 | `ph traces clear` | Remove collected traces (`--keep N` to retain newest, `-y` to skip confirm) |
 | `ph evolve` | Trigger an online evolution cycle using collected traces as context |
+| `ph shell-hook install` | Install shell hook to auto-wrap agent commands (claude, claw, codex, opencode) |
+| `ph shell-hook uninstall` | Remove the shell hook from your rc file |
+| `ph shell-hook status` | Check if the shell hook is installed |
 | `ph upgrade` | Upgrade PolyHarness to the latest version |
 | `ph uninstall` | Uninstall PolyHarness from the current environment (`-y` to skip confirm) |
 
@@ -664,7 +726,7 @@ ph run --max-iterations 5
 ```
 polyharness/
 ├── src/polyharness/
-│   ├── cli.py                   # Click CLI — 22 commands/subcommands
+│   ├── cli.py                   # Click CLI — 25 commands/subcommands
 │   ├── config.py                # Pydantic config models (+ EvolutionConfig)
 │   ├── collector.py             # Trace collector for online evolution
 │   ├── orchestrator.py          # Meta-Harness search loop + progress bar + error recovery
@@ -689,7 +751,7 @@ polyharness/
 │       ├── code-generation/
 │       ├── rag-qa/
 │       └── api-calling/
-├── tests/                       # 165 tests (pytest)
+├── tests/                       # 173 tests (pytest)
 ├── bin/                         # npm wrapper (ph.mjs, postinstall.mjs)
 ├── docs/
 │   ├── development/             # Product roadmap & technical architecture
