@@ -115,6 +115,17 @@ class Workspace:
         # Inject agent-native instruction file for CLI backends
         ws._inject_agent_instructions(agent_backend)
 
+        # Warn if no evaluate script was copied
+        if not (ws.root / eval_entry).exists():
+            import warnings
+
+            warnings.warn(
+                f"No evaluate script found in workspace ({eval_entry}). "
+                "You will need to provide one before running 'ph run'. "
+                "Use --eval-script or --task-dir (with evaluate.py inside) during init.",
+                stacklevel=2,
+            )
+
         return ws
 
     def load_config(self) -> PolyHarnessConfig:

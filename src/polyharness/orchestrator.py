@@ -87,7 +87,18 @@ class Orchestrator:
         else:
             # Step 0: Evaluate base harness
             console.print("[bold]Step 0:[/bold] Evaluating base harness...")
-            base_result = self._evaluate_iteration(0, is_base=True)
+            try:
+                base_result = self._evaluate_iteration(0, is_base=True)
+            except FileNotFoundError as e:
+                console.print(f"[red]Error:[/red] {e}")
+                console.print(
+                    "\n[yellow]Hint:[/yellow] Your workspace is missing an evaluate script. "
+                    "Re-initialize with:\n"
+                    "  ph init --task-dir ./your_tasks/   (if it contains evaluate.py)\n"
+                    "  ph init --eval-script ./evaluate.py  (to specify one directly)\n"
+                    "\nOr copy an evaluate.py into the workspace root."
+                )
+                raise SystemExit(1)
             best_score = base_result
             best_iteration = 0
 
