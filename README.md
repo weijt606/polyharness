@@ -271,7 +271,7 @@ Prefix any agent command with `ph wrap`. Output passes through transparently —
 # Use your agent normally, just add "ph wrap" in front
 ph wrap claude -p "Refactor the auth module to use JWT"
 ph wrap codex "Add retry logic to the API client"
-ph wrap python my_script.py --input data.csv
+ph wrap claw -p "Write integration tests for the payment service"
 ```
 
 Each invocation records a **trace**: agent name, command, exit code, duration, and (optionally) stdout/stderr. Traces are stored in `~/.polyharness/traces/`.

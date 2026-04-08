@@ -271,7 +271,7 @@ ph clean --keep-best           # 清理候选目录释放磁盘空间
 # 正常使用 agent，只是在前面加上 "ph wrap"
 ph wrap claude -p "把 auth 模块重构为 JWT 方案"
 ph wrap codex "给 API 客户端加上重试逻辑"
-ph wrap python my_script.py --input data.csv
+ph wrap claw -p "给支付服务写集成测试"
 ```
 
 每次调用都会记录一条 **trace**：agent 名称、命令、退出码、耗时，以及（可选的）stdout/stderr。Traces 存储在 `~/.polyharness/traces/`。
