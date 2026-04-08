@@ -65,6 +65,59 @@ class HarnessConfig(BaseModel):
     )
 
 
+class EvolutionTriggerConfig(BaseModel):
+    """Trigger strategy configuration for online evolution."""
+
+    strategy: Literal["degradation", "accumulate", "cron", "manual"] = Field(
+        default="manual", description="When to trigger an evolution cycle."
+    )
+    min_samples: int = Field(
+        default=10, ge=1, description="Minimum traces before any trigger fires."
+    )
+    window_size: int = Field(
+        default=20, ge=2, description="Sliding window size for degradation detection."
+    )
+    threshold: float = Field(
+        default=-0.05, description="Score drop threshold to trigger (negative value)."
+    )
+    accumulate_count: int = Field(
+        default=50, ge=1, description="Trigger after collecting this many traces."
+    )
+    cron: str | None = Field(
+        default=None, description="Cron expression for scheduled triggers."
+    )
+
+
+class EvolutionNotifyConfig(BaseModel):
+    """Notification configuration after evolution completes."""
+
+    method: Literal["terminal", "webhook"] = Field(
+        default="terminal", description="Notification method."
+    )
+    webhook_url: str | None = Field(
+        default=None, description="Webhook URL for notifications."
+    )
+
+
+class EvolutionConfig(BaseModel):
+    """Online evolution configuration (v0.2.0)."""
+
+    mode: Literal["batch", "online"] = Field(
+        default="batch", description="batch = v0.1.x manual ph run; online = auto-trigger."
+    )
+    trigger: EvolutionTriggerConfig = Field(default_factory=EvolutionTriggerConfig)
+    auto_apply: bool = Field(
+        default=False, description="Automatically apply best harness (dangerous; default off)."
+    )
+    max_iterations: int = Field(
+        default=3, ge=1, description="Max search iterations per online evolution cycle."
+    )
+    record_output: bool = Field(
+        default=True, description="Record stdout/stderr in traces."
+    )
+    notify: EvolutionNotifyConfig = Field(default_factory=EvolutionNotifyConfig)
+
+
 class PolyHarnessConfig(BaseModel):
     """Top-level configuration for a PolyHarness workspace."""
 
@@ -72,6 +125,7 @@ class PolyHarnessConfig(BaseModel):
     proposer: ProposerConfig = Field(default_factory=ProposerConfig)
     evaluator: EvaluatorConfig = Field(default_factory=EvaluatorConfig)
     harness: HarnessConfig = Field(default_factory=HarnessConfig)
+    evolution: EvolutionConfig = Field(default_factory=EvolutionConfig)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> PolyHarnessConfig:
