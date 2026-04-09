@@ -292,6 +292,7 @@ class Workspace:
         "claude-code": "CLAUDE.md",
         "claw-code": "CLAW.md",
         "codex": "CODEX.md",
+        "hermes": "AGENTS.md",
         "opencode": "OPENCODE.md",
     }
 

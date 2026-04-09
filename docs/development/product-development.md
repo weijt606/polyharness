@@ -555,7 +555,7 @@ PolyHarness 是面向 AI agent 的开源优化引擎，用迭代搜索把 Meta-H
 
 **项目边界**：
 - 它优化的是现有 agent 的工作方式，而不是替代它们成为新的通用 coding agent。
-- 它更适合作为 Claude Code、Codex、ForgeCode 这类 agent 之上的搜索与改进引擎。
+- 它更适合作为 Claude Code、Codex、[ForgeCode](https://github.com/antinomyhq/forgecode) 这类 agent 之上的搜索与改进引擎。
 - 它的价值在于把 prompt、工具配置、harness 逻辑和评估反馈连接成一个可重复运行的闭环。
 
 ## 8. 与现有研究和生态的关系

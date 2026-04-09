@@ -24,7 +24,7 @@ class SearchConfig(BaseModel):
 class ProposerConfig(BaseModel):
     """Proposer agent configuration."""
 
-    backend: Literal["api", "openai", "claude-code", "claw-code", "codex", "opencode", "local"] = Field(
+    backend: Literal["api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "local"] = Field(
         default="api", description="Proposer backend type."
     )
     model: str = Field(

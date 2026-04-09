@@ -14,6 +14,7 @@ from polyharness.proposer.adapters import (
     CLIAdapter,
     CLIResult,
     CodexAdapter,
+    HermesAdapter,
     OpenCodeAdapter,
     get_adapter,
 )
@@ -24,7 +25,7 @@ from polyharness.proposer.cli_proposer import CLIProposer, _build_prompt
 # ---------------------------------------------------------------------------
 
 def test_registry_has_all_backends():
-    assert set(ADAPTER_REGISTRY) == {"claude-code", "claw-code", "codex", "opencode"}
+    assert set(ADAPTER_REGISTRY) == {"claude-code", "claw-code", "codex", "hermes", "opencode"}
 
 
 def test_get_adapter_valid():
@@ -78,6 +79,21 @@ def test_opencode_command():
     cmd = adapter.build_command("optimize")
     assert cmd[0] == "opencode"
     assert "optimize" in cmd
+
+
+def test_hermes_command():
+    adapter = HermesAdapter()
+    cmd = adapter.build_command("improve harness")
+    assert cmd[0] == "hermes"
+    assert "chat" in cmd
+    assert "-q" in cmd
+    assert "improve harness" in cmd
+
+
+def test_hermes_custom_path():
+    adapter = HermesAdapter()
+    cmd = adapter.build_command("x", cli_path="/usr/local/bin/hermes")
+    assert cmd[0] == "/usr/local/bin/hermes"
 
 
 # ---------------------------------------------------------------------------

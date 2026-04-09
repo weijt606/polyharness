@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -30,7 +30,7 @@ Your AI agent runs the same harness every time. Same prompts, same tool config, 
 | | |
 |---|---|
 | **Self-Evolution** | Iteratively searches over harness changes and keeps the full evaluation history in one workspace. |
-| **7 Agent Backends** | Claude Code · Claw Code · Codex · OpenCode · API direct · OpenAI-compatible · Local — plug in any CLI agent. |
+| **8 Agent Backends** | Claude Code · Claw Code · Codex · Hermes · OpenCode · API direct · OpenAI-compatible · Local — plug in any CLI agent. |
 | **Full History** | Every iteration's code, scores, and traces preserved. The Meta-Harness paper reports that non-Markovian search outperforms blind retries. |
 | **Search Tree** | Visualize the optimization path. Compare any two candidates with per-task diffs. |
 | **One-Command Setup** | `ph init --base-harness ... --task-dir ...` — copies files, configures workspace, done. |
@@ -59,7 +59,7 @@ PolyHarness is the open-source engine for iteratively searching over an agent's 
 
 It builds on ideas from the Meta-Harness paper and the TBench2 results reported there, while focusing this repository on the optimization workflow itself — how harness variants are proposed, evaluated, and revised over repeated runs.
 
-If tools like ForgeCode help you code, PolyHarness helps you search for task-specific harness improvements by iterating on prompts, tool use, and harness logic.
+If tools like [ForgeCode](https://github.com/antinomyhq/forgecode) help you code, PolyHarness helps you search for task-specific harness improvements by iterating on prompts, tool use, and harness logic.
 
 ---
 
@@ -229,7 +229,7 @@ PolyHarness automatically sandboxes your agent inside this workspace, ensuring i
 
 | Scenario | How to configure |
 |----------|------------------|
-| **Supported CLI Tools** | Run `ph init --agent <name>`. PolyHarness auto-injects required instructions (e.g., `CLAUDE.md`).<br>*(Supported: claude-code, claw-code, codex, opencode)* |
+| **Supported CLI Tools** | Run `ph init --agent <name>`. PolyHarness auto-injects required instructions (e.g., `CLAUDE.md`).<br>*(Supported: claude-code, claw-code, codex, hermes, opencode)* |
 | **Anthropic API** | Run `ph init --agent api`. Set `export ANTHROPIC_API_KEY="sk-ant-..."` before `ph run`. |
 | **OpenAI / Local Models** | Run `ph init --agent openai`. Then configure the endpoint — see [Local Model Setup](#local-model-setup) below. |
 | **Custom CLI path** | If your CLI agent uses a non-standard command, edit `config.yaml` in the workspace before running:<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }`|
@@ -298,6 +298,7 @@ Just add `ph wrap --auto-evolve` in front of your agent command (pick the one ma
 ph wrap --auto-evolve claude -p "Refactor the auth module to use JWT"   # Claude Code
 ph wrap --auto-evolve claw -p "Write integration tests for payments"     # Claw Code
 ph wrap --auto-evolve codex "Add retry logic to the API client"          # Codex
+ph wrap --auto-evolve hermes chat -q "Refactor the DB connection pool"   # Hermes Agent
 ph wrap --auto-evolve opencode -p "Fix the flaky parser test"            # OpenCode
 
 # Local models — wrap the CLI command directly
@@ -367,10 +368,11 @@ After that, just use your agent as usual:
 claude -p "Refactor auth to JWT"        # automatically becomes: ph wrap --auto-evolve claude -p ...
 claw -p "Write payment tests"            # same — auto-wrapped
 codex "Add retry logic"                  # same
+hermes chat -q "Refactor pool"           # same
 opencode -p "Fix flaky test"             # same
 ```
 
-How it works: a `preexec` hook in your shell detects `claude`/`claw`/`codex`/`opencode` commands and transparently redirects them through `ph wrap --auto-evolve`. Your output is unchanged.
+How it works: a `preexec` hook in your shell detects `claude`/`claw`/`codex`/`hermes`/`opencode` commands and transparently redirects them through `ph wrap --auto-evolve`. Your output is unchanged.
 
 ```bash
 ph shell-hook status           # check if installed
@@ -459,12 +461,13 @@ The Proposer reads **all of this** before generating the next candidate. It can 
 | `claude-code` | `claude -p` | Official Claude Code CLI (Pro/Teams subscription) |
 | `claw-code` | `claw -p` | Open-source Claw Code CLI |
 | `codex` | `codex --quiet` | OpenAI Codex CLI |
+| `hermes` | `hermes chat -q` | Nous Research [Hermes Agent](https://github.com/NousResearch/hermes-agent) CLI |
 | `opencode` | `opencode -p` | OpenCode CLI |
 | `local` | — | Offline rule-based engine for development & testing |
 
 `ph doctor` auto-detects all available backends and shows their status.
 
-When you run `ph init --agent claude-code`, PolyHarness automatically generates a `CLAUDE.md` instruction file in the workspace, telling the agent how to behave as an optimization Proposer. Same for `CLAW.md`, `CODEX.md`, `OPENCODE.md` — each agent's native instruction format.
+When you run `ph init --agent claude-code`, PolyHarness automatically generates a `CLAUDE.md` instruction file in the workspace, telling the agent how to behave as an optimization Proposer. Same for `CLAW.md`, `CODEX.md`, `AGENTS.md` (Hermes), `OPENCODE.md` — each agent's native instruction format.
 
 ### Local Model Setup
 
@@ -517,7 +520,7 @@ search:
   parent_selection: best       # Strategy: best | tournament | all
 
 proposer:
-  backend: api                 # api | openai | claude-code | claw-code | codex | opencode | local
+  backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
   model: claude-sonnet-4-20250514  # Model name (for api/openai backends)
   base_url: null               # Custom API endpoint (for openai backend)
   api_key: null                # API key override (null = use env var)
@@ -744,6 +747,7 @@ polyharness/
 │   │       ├── claude_code.py   # claude -p
 │   │       ├── claw_code.py     # claw -p
 │   │       ├── codex.py         # codex --quiet --auto-edit
+│   │       ├── hermes.py        # hermes chat -q
 │   │       └── opencode.py      # opencode -p
 │   └── templates/               # 5 built-in task templates
 │       ├── text-classification/

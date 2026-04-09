@@ -45,6 +45,8 @@ def run_doctor() -> None:
         click.echo("Recommended: claude-code (highest paper fidelity)")
     elif "claw-code" in available:
         click.echo("Recommended: claw-code (open-source, full tool support)")
+    elif "hermes" in available:
+        click.echo("Recommended: hermes (self-improving agent with skills)")
     elif "codex" in available:
         click.echo("Recommended: codex (OpenAI agent)")
     elif "opencode" in available:

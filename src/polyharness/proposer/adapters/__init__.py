@@ -10,12 +10,14 @@ from polyharness.proposer.adapters.base import CLIAdapter, CLIResult
 from polyharness.proposer.adapters.claude_code import ClaudeCodeAdapter
 from polyharness.proposer.adapters.claw_code import ClawCodeAdapter
 from polyharness.proposer.adapters.codex import CodexAdapter
+from polyharness.proposer.adapters.hermes import HermesAdapter
 from polyharness.proposer.adapters.opencode import OpenCodeAdapter
 
 ADAPTER_REGISTRY: dict[str, type[CLIAdapter]] = {
     "claude-code": ClaudeCodeAdapter,
     "claw-code": ClawCodeAdapter,
     "codex": CodexAdapter,
+    "hermes": HermesAdapter,
     "opencode": OpenCodeAdapter,
 }
 
@@ -38,6 +40,7 @@ __all__ = [
     "ClaudeCodeAdapter",
     "ClawCodeAdapter",
     "CodexAdapter",
+    "HermesAdapter",
     "OpenCodeAdapter",
     "ADAPTER_REGISTRY",
     "get_adapter",
