@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -30,7 +30,7 @@
 | | |
 |---|---|
 | **自动进化** | 通过迭代搜索探索 harness 变更，并把完整评估历史保存在同一个 workspace 中。 |
-| **7 个 Agent 后端** | Claude Code · Claw Code · Codex · OpenCode · API 直连 · OpenAI 兼容 · Local，可接入任何 CLI agent。 |
+| **8 个 Agent 后端** | Claude Code · Claw Code · Codex · Hermes · OpenCode · API 直连 · OpenAI 兼容 · Local，可接入任何 CLI agent。 |
 | **完整历史** | 每轮迭代的代码、分数、执行轨迹完整保留。Meta-Harness 论文报告非马尔可夫搜索优于盲目重试。 |
 | **搜索树** | 可视化优化路径，对比任意两个候选的逐任务差异。 |
 | **一条命令完成初始化** | `ph init --base-harness ... --task-dir ...`，复制文件、配置 workspace，一步完成。 |
@@ -59,7 +59,7 @@ PolyHarness 是一个通过迭代评估与搜索来探索 agent harness 变体�
 
 它继承了 Meta-Harness 论文及其中 TBench2 结果所体现的核心思路，但这个仓库关注的是优化流程本身如何落地，也就是 harness 变体怎样在一轮轮评估、诊断和修改中被系统性迭代。
 
-如果说 ForgeCode 这类工具是在直接帮你写代码，那么 PolyHarness 更像是帮助你在自己的任务上持续试验 prompt、工具使用和 harness 逻辑配置的搜索层。
+如果说 [ForgeCode](https://github.com/antinomyhq/forgecode) 这类工具是在直接帮你写代码，那么 PolyHarness 更像是帮助你在自己的任务上持续试验 prompt、工具使用和 harness 逻辑配置的搜索层。
 
 ---
 
@@ -229,7 +229,7 @@ PolyHarness 会通过沙盒编排将你的 Agent 的工作目录（CWD）限制�
 
 | 使用场景 | 配置方法 |
 |----------|------------------|
-| **受原生支持的 CLI Agent 工具** | 使用 `ph init --agent <name>`。系统会自动注入其专属提示词指令（如 `CLAUDE.md`）。<br>*(支持: claude-code, claw-code, codex, opencode)* |
+| **受原生支持的 CLI Agent 工具** | 使用 `ph init --agent <name>`。系统会自动注入其专属提示词指令（如 `CLAUDE.md`）。<br>*(支持: claude-code, claw-code, codex, hermes, opencode)* |
 | **Anthropic API 直连** | 使用 `ph init --agent api`。在 `ph run` 前设置 `export ANTHROPIC_API_KEY="sk-ant-..."`。 |
 | **OpenAI / 本地模型** | 使用 `ph init --agent openai`。然后配置 endpoint——参见下方 [本地模型配置](#本地模型配置) 章节。 |
 | **CLI 命令被自定义 / 路径未响应** | 如果你的 CLI Agent 使用了非标命令（或未设置全局 PATH），请在初始化后手动修改 workspace 根目录下的 `config.yaml`：<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }` |
@@ -298,6 +298,7 @@ ph clean --keep-best           # 清理候选目录释放磁盘空间
 ph wrap --auto-evolve claude -p "把 auth 模块重构为 JWT 方案"      # Claude Code
 ph wrap --auto-evolve claw -p "给支付服务写集成测试"            # Claw Code
 ph wrap --auto-evolve codex "给 API 客户端加上重试逻辑"              # Codex
+ph wrap --auto-evolve hermes chat -q "重构数据库连接池"              # Hermes Agent
 ph wrap --auto-evolve opencode -p "修复不稳定的 parser 测试"       # OpenCode
 
 # 本地模型 —— 直接包裹 CLI 命令
@@ -367,10 +368,11 @@ ph shell-hook install          # 一次性设置，写入 ~/.zshrc
 claude -p "把 auth 重构为 JWT"            # 自动变为：ph wrap --auto-evolve claude -p ...
 claw -p "写支付测试"                  # 同理——自动包裹
 codex "加重试逻辑"                     # 同理
+hermes chat -q "重构连接池"            # 同理
 opencode -p "修复不稳定测试"            # 同理
 ```
 
-原理：shell 的 `preexec` 钩子检测到 `claude`/`claw`/`codex`/`opencode` 命令后，透明地通过 `ph wrap --auto-evolve` 转发。你的输出不会变。
+原理：shell 的 `preexec` 钩子检测到 `claude`/`claw`/`codex`/`hermes`/`opencode` 命令后，透明地通过 `ph wrap --auto-evolve` 转发。你的输出不会变。
 
 ```bash
 ph shell-hook status           # 查看是否已安装
@@ -459,12 +461,13 @@ Proposer 在生成下一个候选之前会读取**所有这些信息**。它能�
 | `claude-code` | `claude -p` | 官方 Claude Code CLI（Pro/Teams 订阅） |
 | `claw-code` | `claw -p` | 开源 Claw Code CLI |
 | `codex` | `codex --quiet` | OpenAI Codex CLI |
+| `hermes` | `hermes chat -q` | Nous Research [Hermes Agent](https://github.com/NousResearch/hermes-agent) CLI |
 | `opencode` | `opencode -p` | OpenCode CLI |
 | `local` | — | 离线规则引擎，用于开发和测试 |
 
 `ph doctor` 会自动检测所有可用后端并显示状态。
 
-当你运行 `ph init --agent claude-code` 时，PolyHarness 会在 workspace 中自动生成 `CLAUDE.md` 指令文件，告诉 agent 如何作为优化 Proposer 工作。`CLAW.md`、`CODEX.md`、`OPENCODE.md` 也是同样的机制，每个 agent 都使用它自己的原生指令格式。
+当你运行 `ph init --agent claude-code` 时，PolyHarness 会在 workspace 中自动生成 `CLAUDE.md` 指令文件，告诉 agent 如何作为优化 Proposer 工作。`CLAW.md`、`CODEX.md`、`AGENTS.md`（Hermes）、`OPENCODE.md` 也是同样的机制，每个 agent 都使用它自己的原生指令格式。
 
 ### 本地模型配置
 
@@ -517,7 +520,7 @@ search:
   parent_selection: best       # 父候选选择策略: best | tournament | all
 
 proposer:
-  backend: api                 # api | openai | claude-code | claw-code | codex | opencode | local
+  backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
   model: claude-sonnet-4-20250514  # 模型名称（api/openai 后端使用）
   base_url: null               # 自定义 API 端点（openai 后端使用）
   api_key: null                # API 密钥覆盖（null = 使用环境变量）
@@ -744,6 +747,7 @@ polyharness/
 │   │       ├── claude_code.py   # claude -p
 │   │       ├── claw_code.py     # claw -p
 │   │       ├── codex.py         # codex --quiet --auto-edit
+│   │       ├── hermes.py        # hermes chat -q
 │   │       └── opencode.py      # opencode -p
 │   └── templates/               # 5 个内置任务模板
 │       ├── text-classification/
