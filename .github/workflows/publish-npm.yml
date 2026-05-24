@@ -16,17 +16,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # NOTE: do NOT set registry-url here — it writes an .npmrc with an
-      # (empty) _authToken that shadows OIDC trusted publishing.
+      # No registry-url — it writes an .npmrc whose empty _authToken shadows OIDC.
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Upgrade npm (trusted publishing needs >= 11.5.1)
+      # Upgrade + publish in ONE step so the publish definitely uses the new npm
+      # (trusted publishing needs npm >= 11.5.1). Diagnostics confirm the setup.
+      - name: Publish to npm (OIDC trusted publishing)
         run: |
           npm install -g npm@latest
-          npm -v
-
-      # OIDC trusted publishing — no token, no .npmrc. Provenance is automatic.
-      - name: Publish to npm
-        run: npm publish
+          echo "npm version: $(npm -v)"
+          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+            echo "OIDC: id-token IS available"
+          else
+            echo "OIDC: id-token MISSING — check 'id-token: write' and repo Actions settings"
+          fi
+          npm publish
