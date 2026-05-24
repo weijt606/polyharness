@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -618,11 +618,11 @@ python -m polyharness --version
 | `ph init` | 初始化 workspace，自动复制 harness、任务、评估脚本 |
 | `ph run` | 启动优化搜索循环 |
 | `ph status` | 进度表格，包含耗时、改进率和增量 |
-| `ph log` | 搜索树带增量（Δ）列，或用 `--flat` 查看表格视图 |
+| `ph log` | 搜索树带增量（Δ）列和 Pareto 前沿（◆）标记，或用 `--flat` 查看表格视图 |
 | `ph best` | 展示最佳候选：分数、逐任务明细、变更摘要 |
 | `ph compare A B` | 对比两个迭代：分数差异 + 统一代码 diff |
 | `ph diff <N>` | `compare 0 <N>` 的快捷方式 |
-| `ph leaderboard` | 候选排名表（`--top N`、`--tasks` 展开每题分数） |
+| `ph leaderboard` | 候选排名表，含 Pareto（◆）与后端列（`--top N`、`--tasks` 展开每题分数） |
 | `ph trace <N>` | 查看某次迭代的 stdout、stderr、metrics、退出码 |
 | `ph report` | 生成完整 markdown 报告，包含分数趋势和逐任务表格 |
 | `ph apply` | 将最优 harness 回写到 `base_harness/`，或通过 `--target` 指定目录 |

@@ -30,11 +30,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   full. Off by default.
 - **Reproducible runs** (`search.seed`) — seeds the RNG so tournament/pareto/
   novelty regeneration are repeatable across runs.
+- **Observability** — `ph log` marks Pareto-frontier members (◆); `ph leaderboard`
+  adds a Pareto column and a Backend column (shown only when an ensemble was
+  used). `SearchLog.pareto_win_counts()` powers both the CLI and the orchestrator.
 - `proposer_backend` recorded in each candidate's `metadata.json` (ensemble mode)
 - Hermes Agent adapter (`hermes`) — 8th proposer backend (`hermes chat -q`)
 - `--strategy pareto` and `--ensemble` options for `ph run`
 - `proposer/bandit.py` — UCB1 `BackendBandit`
-- 24 new tests (199 total)
+- 31 new tests (206 total)
 
 ### Changed
 - Agent backends: 7 → 8 (added Hermes Agent)

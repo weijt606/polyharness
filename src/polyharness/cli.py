@@ -614,21 +614,35 @@ def log(workspace: str, flat: bool):
 
     best_i = search_log.best_iteration
     parent_scores = {e.iteration: e.score for e in search_log.entries}
+    pareto_front = set(search_log.pareto_win_counts())
 
     if flat:
-        _print_log_flat(search_log.entries, best_i, parent_scores)
+        _print_log_flat(search_log.entries, best_i, parent_scores, pareto_front)
     else:
-        _print_log_tree(search_log.entries, best_i, parent_scores)
+        _print_log_tree(search_log.entries, best_i, parent_scores, pareto_front)
 
+    legend = "[yellow]★[/yellow] best"
+    if pareto_front:
+        legend += "   [magenta]◆[/magenta] Pareto frontier (best on ≥1 task)"
     console.print(
         f"\n{len(search_log)} iterations  |  "
-        f"best: iter_{best_i} ({search_log.best_score:.4f})"
+        f"best: iter_{best_i} ({search_log.best_score:.4f})  |  {legend}"
     )
 
 
-def _log_entry_label(entry, best_i: int, parent_scores: dict[int, float] | None = None) -> str:
+def _log_entry_label(
+    entry,
+    best_i: int,
+    parent_scores: dict[int, float] | None = None,
+    pareto_front: set[int] | None = None,
+) -> str:
     """Format a single log entry as a rich-styled label."""
     star = " [bold yellow]★[/bold yellow]" if entry.iteration == best_i else ""
+    pf = (
+        " [magenta]◆[/magenta]"
+        if pareto_front and entry.iteration in pareto_front
+        else ""
+    )
     score_color = "green" if entry.score >= entry.best_so_far else "white"
     delta = ""
     if parent_scores and entry.parent is not None and entry.parent in parent_scores:
@@ -641,11 +655,16 @@ def _log_entry_label(entry, best_i: int, parent_scores: dict[int, float] | None 
             delta = "  [dim]+0.0000[/dim]"
     return (
         f"[bold cyan]iter_{entry.iteration}[/bold cyan]  "
-        f"[{score_color}]{entry.score:.4f}[/{score_color}]{delta}{star}"
+        f"[{score_color}]{entry.score:.4f}[/{score_color}]{delta}{pf}{star}"
     )
 
 
-def _print_log_tree(entries, best_i: int, parent_scores: dict[int, float] | None = None) -> None:
+def _print_log_tree(
+    entries,
+    best_i: int,
+    parent_scores: dict[int, float] | None = None,
+    pareto_front: set[int] | None = None,
+) -> None:
     """Print a rich Tree showing parent→child relationships."""
     from rich.tree import Tree
 
@@ -661,26 +680,31 @@ def _print_log_tree(entries, best_i: int, parent_scores: dict[int, float] | None
     roots = children.get(None, [])
     if not roots:
         # Fallback to flat if no root found
-        _print_log_flat(entries, best_i, parent_scores)
+        _print_log_flat(entries, best_i, parent_scores, pareto_front)
         return
 
     tree = Tree("[bold]Search Tree[/bold]")
 
     def _add_children(parent_tree, iteration: int) -> None:
         for child in children.get(iteration, []):
-            label = _log_entry_label(child, best_i, parent_scores)
+            label = _log_entry_label(child, best_i, parent_scores, pareto_front)
             branch = parent_tree.add(label)
             _add_children(branch, child.iteration)
 
     for root_entry in roots:
-        label = _log_entry_label(root_entry, best_i, parent_scores)
+        label = _log_entry_label(root_entry, best_i, parent_scores, pareto_front)
         root_branch = tree.add(label)
         _add_children(root_branch, root_entry.iteration)
 
     console.print(tree)
 
 
-def _print_log_flat(entries, best_i: int, parent_scores: dict[int, float] | None = None) -> None:
+def _print_log_flat(
+    entries,
+    best_i: int,
+    parent_scores: dict[int, float] | None = None,
+    pareto_front: set[int] | None = None,
+) -> None:
     """Print a chronological table of all iterations."""
     table = Table(title="Search Log")
     table.add_column("Iteration", style="cyan")
@@ -688,6 +712,8 @@ def _print_log_flat(entries, best_i: int, parent_scores: dict[int, float] | None
     table.add_column("Score", style="green")
     table.add_column("Δ", style="bold")
     table.add_column("Best", style="bold green")
+    if pareto_front:
+        table.add_column("PF", style="magenta", justify="center")
     table.add_column("", style="yellow")
 
     for e in entries:
@@ -702,14 +728,17 @@ def _print_log_flat(entries, best_i: int, parent_scores: dict[int, float] | None
                 delta = f"[red]{d:.4f}[/red]"
             else:
                 delta = "[dim]+0.0000[/dim]"
-        table.add_row(
+        row = [
             f"iter_{e.iteration}",
             parent_str,
             f"{e.score:.4f}",
             delta,
             f"{e.best_so_far:.4f}",
-            star,
-        )
+        ]
+        if pareto_front:
+            row.append("◆" if e.iteration in pareto_front else "")
+        row.append(star)
+        table.add_row(*row)
 
     console.print(table)
 
@@ -1008,6 +1037,11 @@ def leaderboard(workspace: str, top: int | None, tasks: bool):
         entries = entries[:top]
 
     base_score = next((e.score for e in log.entries if e.iteration == 0), 0.0)
+    pareto_front = set(log.pareto_win_counts())
+
+    # Backend per candidate (only meaningful when an ensemble was used).
+    backends = {e.iteration: ws.candidate_metadata(e.iteration).get("proposer_backend") for e in entries}
+    show_backend = any(backends.values())
 
     # Gather all task names
     all_task_names: list[str] = []
@@ -1023,6 +1057,10 @@ def leaderboard(workspace: str, top: int | None, tasks: bool):
     table.add_column("Score", style="green")
     table.add_column("vs Base", style="bold")
     table.add_column("Parent", style="dim")
+    if pareto_front:
+        table.add_column("PF", style="magenta", justify="center")
+    if show_backend:
+        table.add_column("Backend", style="blue")
     if tasks:
         for tn in all_task_names:
             table.add_column(tn, style="white", width=8)
@@ -1046,6 +1084,10 @@ def leaderboard(workspace: str, top: int | None, tasks: bool):
             vs_base,
             parent_str,
         ]
+        if pareto_front:
+            row.append("◆" if entry.iteration in pareto_front else "")
+        if show_backend:
+            row.append(backends.get(entry.iteration) or "—")
         if tasks:
             for tn in all_task_names:
                 val = entry.task_scores.get(tn)
@@ -1054,7 +1096,10 @@ def leaderboard(workspace: str, top: int | None, tasks: bool):
         table.add_row(*row)
 
     console.print(table)
-    console.print(f"\n{len(log)} total iterations  |  Showing top {len(entries)}")
+    footer = f"\n{len(log)} total iterations  |  Showing top {len(entries)}"
+    if pareto_front:
+        footer += "  |  [magenta]◆[/magenta] Pareto frontier"
+    console.print(footer)
 
 
 # --- trace command ---

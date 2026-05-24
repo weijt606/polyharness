@@ -59,3 +59,23 @@ def test_log_entry_roundtrip():
     assert restored.parent == 1
     assert restored.score == 0.72
     assert restored.task_scores == {"a": 0.8}
+
+
+def test_pareto_win_counts(tmp_path):
+    log = SearchLog(tmp_path / "search_log.jsonl")
+    log.append(0, None, 0.5, {"A": 0.5, "B": 0.5})
+    log.append(1, 0, 0.5, {"A": 0.9, "B": 0.1})  # wins task A
+    log.append(2, 0, 0.5, {"A": 0.1, "B": 0.9})  # wins task B
+
+    counts = log.pareto_win_counts()
+    # iter_0 wins nothing; iter_1 and iter_2 each win one task.
+    assert set(counts) == {1, 2}
+    assert counts[1] == 1
+    assert counts[2] == 1
+
+
+def test_pareto_win_counts_empty_without_task_scores(tmp_path):
+    log = SearchLog(tmp_path / "search_log.jsonl")
+    log.append(0, None, 0.3, {})
+    log.append(1, 0, 0.5, {})
+    assert log.pareto_win_counts() == {}

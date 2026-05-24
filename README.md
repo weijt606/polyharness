@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -618,11 +618,11 @@ python -m polyharness --version
 | `ph init` | Initialize workspace with auto-copy of harness, tasks, eval script |
 | `ph run` | Start the optimization search loop |
 | `ph status` | Progress table with elapsed time, improvement rate, and delta |
-| `ph log` | Search tree with delta (Δ) column (or `--flat` for table) |
+| `ph log` | Search tree with delta (Δ) column and Pareto-frontier (◆) markers (or `--flat` for table) |
 | `ph best` | Show best candidate: score, per-task breakdown, changes summary |
 | `ph compare A B` | Compare two iterations: score deltas + unified code diff |
 | `ph diff <N>` | Shorthand for `compare 0 <N>` |
-| `ph leaderboard` | Ranked table of all candidates (`--top N`, `--tasks` drilldown) |
+| `ph leaderboard` | Ranked table of all candidates with Pareto (◆) and backend columns (`--top N`, `--tasks` drilldown) |
 | `ph trace <N>` | View stdout, stderr, metrics, exit code for an iteration |
 | `ph report` | Generate a full markdown report with score trends and per-task table |
 | `ph apply` | Copy best harness back to `base_harness/` (or `--target` dir) |

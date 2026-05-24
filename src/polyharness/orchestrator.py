@@ -377,26 +377,7 @@ class Orchestrator:
 
         Falls back to ``best`` when per-task scores are unavailable.
         """
-        entries = [e for e in self.search_log.entries if e.task_scores]
-        if not entries:
-            return self.search_log.best_iteration
-
-        task_names: set[str] = set()
-        for e in entries:
-            task_names.update(e.task_scores.keys())
-        if not task_names:
-            return self.search_log.best_iteration
-
-        eps = 1e-9
-        win_counts: dict[int, int] = {}
-        for task in task_names:
-            best_for_task = max(
-                e.task_scores.get(task, float("-inf")) for e in entries
-            )
-            for e in entries:
-                if e.task_scores.get(task, float("-inf")) >= best_for_task - eps:
-                    win_counts[e.iteration] = win_counts.get(e.iteration, 0) + 1
-
+        win_counts = self.search_log.pareto_win_counts()
         if not win_counts:
             return self.search_log.best_iteration
 

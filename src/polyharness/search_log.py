@@ -82,5 +82,30 @@ class SearchLog:
             return 0
         return max(self._entries, key=lambda e: e.score).iteration
 
+    def pareto_win_counts(self) -> dict[int, int]:
+        """Map each Pareto-frontier iteration to the number of tasks it wins.
+
+        A candidate is on the frontier if it achieves the top score on at
+        least one individual task (GEPA-style per-task winners). The values
+        are how many tasks each frontier member wins. Returns an empty dict
+        when no per-task scores are recorded.
+        """
+        entries = [e for e in self._entries if e.task_scores]
+        if not entries:
+            return {}
+
+        task_names: set[str] = set()
+        for e in entries:
+            task_names.update(e.task_scores.keys())
+
+        eps = 1e-9
+        counts: dict[int, int] = {}
+        for task in task_names:
+            best = max(e.task_scores.get(task, float("-inf")) for e in entries)
+            for e in entries:
+                if e.task_scores.get(task, float("-inf")) >= best - eps:
+                    counts[e.iteration] = counts.get(e.iteration, 0) + 1
+        return counts
+
     def __len__(self) -> int:
         return len(self._entries)
