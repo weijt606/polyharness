@@ -194,6 +194,16 @@ class Workspace:
     def candidate_path(self, iteration: int) -> Path:
         return self.candidates_dir / f"iter_{iteration}"
 
+    def candidate_metadata(self, iteration: int) -> dict:
+        """Read a candidate's metadata.json (empty dict if absent/unreadable)."""
+        meta_file = self.candidate_path(iteration) / "metadata.json"
+        if not meta_file.exists():
+            return {}
+        try:
+            return json.loads(meta_file.read_text())
+        except (json.JSONDecodeError, ValueError):
+            return {}
+
     def is_initialized(self) -> bool:
         """Check if workspace has required structure."""
         return (

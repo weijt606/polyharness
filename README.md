@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -52,6 +52,12 @@ PolyHarness fills that gap. It's the open-source engine that makes Meta-Harness 
 > **Think of it this way:**
 > - Memory tools (like Supermemory) give agents persistent **memory** across conversations.
 > - **PolyHarness gives agents persistent self-evolution** — you get a repeatable way to refine how they work over time.
+
+### Part of a wave — specialized for harnesses
+
+PolyHarness doesn't stand alone. A wave of open-source projects has shown that pairing LLMs with evolutionary search systematically improves code and prompts: [GEPA](https://github.com/gepa-ai/gepa) (reflective prompt evolution over a Pareto frontier), [ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve) (sample-efficient program evolution), [OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve) (an open AlphaEvolve), and the [Darwin Gödel Machine](https://sakana.ai/dgm/) (open-ended self-improving agents).
+
+Most of these evolve *general* programs or algorithms. PolyHarness is the member of this wave **specialized for agent harnesses** — the prompts, tool config, and orchestration *around* an existing agent — with a focus on **online evolution from real usage** (`ph wrap` → `ph evolve`). It borrows the strongest ideas from these projects and applies them to any CLI agent on your own tasks: Pareto-frontier parent selection (GEPA), code-novelty rejection and an adaptive backend ensemble (ShinkaEvolve), and cascade evaluation (AlphaEvolve/OpenEvolve).
 
 ## What PolyHarness Is
 
@@ -469,6 +475,16 @@ The Proposer reads **all of this** before generating the next candidate. It can 
 
 When you run `ph init --agent claude-code`, PolyHarness automatically generates a `CLAUDE.md` instruction file in the workspace, telling the agent how to behave as an optimization Proposer. Same for `CLAW.md`, `CODEX.md`, `AGENTS.md` (Hermes), `OPENCODE.md` — each agent's native instruction format.
 
+#### Backend ensemble (adaptive selection)
+
+Don't know which backend writes the best harness changes for your task? Let PolyHarness find out. Pass several and it picks one per iteration with a **UCB bandit**, shifting picks toward whichever backend actually produces *improving* candidates:
+
+```bash
+ph run --ensemble "claude-code,codex,local"
+```
+
+At the end of the run you get a per-backend breakdown (picks + improve-rate). Selection is deterministic given the reward sequence, so runs stay reproducible. Inspired by ShinkaEvolve's adaptive LLM-ensemble selection.
+
 ### Local Model Setup
 
 If you're running a local model (Ollama, vLLM, LM Studio, or any OpenAI-compatible server), use the `openai` backend:
@@ -517,10 +533,16 @@ After `ph init`, the workspace has a `config.yaml` with these sections:
 search:
   max_iterations: 20          # Maximum search iterations
   early_stop_patience: 5      # Stop after N iterations with no improvement
-  parent_selection: best       # Strategy: best | tournament | all
+  parent_selection: best       # Strategy: best | tournament | all | pareto
+  novelty_filter: false        # Reject near-duplicate candidates before eval (saves budget)
+  novelty_threshold: 0.97      # Similarity ratio above which a candidate is a near-duplicate
+  novelty_max_retries: 1       # Regenerate a near-duplicate this many times before skipping
+  seed: null                   # RNG seed — set an int to make randomized runs reproducible
 
 proposer:
   backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
+  ensemble: []                 # If non-empty, pick among these backends per iteration via a UCB bandit
+  bandit_c: 1.41421356         # UCB exploration constant (higher = more exploration)
   model: claude-sonnet-4-20250514  # Model name (for api/openai backends)
   base_url: null               # Custom API endpoint (for openai backend)
   api_key: null                # API key override (null = use env var)
@@ -532,6 +554,9 @@ evaluator:
   type: python                 # python | docker | custom
   entry: evaluate.py           # Evaluator script entrypoint
   timeout: 300                 # Per-task timeout in seconds
+  cascade: false               # Stage cheap subset first; skip rest if it fails the gate (per-task mode)
+  cascade_threshold: 0.4       # Min stage-1 mean score required to run the full task set
+  cascade_stage1: 0            # Tasks in stage 1 (0 = auto, ~1/3 of the list)
 
 harness:
   language: python             # Harness code language
@@ -599,11 +624,11 @@ python -m polyharness --version
 | `ph init` | Initialize workspace with auto-copy of harness, tasks, eval script |
 | `ph run` | Start the optimization search loop |
 | `ph status` | Progress table with elapsed time, improvement rate, and delta |
-| `ph log` | Search tree with delta (Δ) column (or `--flat` for table) |
+| `ph log` | Search tree with delta (Δ) column and Pareto-frontier (◆) markers (or `--flat` for table) |
 | `ph best` | Show best candidate: score, per-task breakdown, changes summary |
 | `ph compare A B` | Compare two iterations: score deltas + unified code diff |
 | `ph diff <N>` | Shorthand for `compare 0 <N>` |
-| `ph leaderboard` | Ranked table of all candidates (`--top N`, `--tasks` drilldown) |
+| `ph leaderboard` | Ranked table of all candidates with Pareto (◆) and backend columns (`--top N`, `--tasks` drilldown) |
 | `ph trace <N>` | View stdout, stderr, metrics, exit code for an iteration |
 | `ph report` | Generate a full markdown report with score trends and per-task table |
 | `ph apply` | Copy best harness back to `base_harness/` (or `--target` dir) |
@@ -647,7 +672,8 @@ python -m polyharness --version
 --dry-run            Only evaluate the base harness, skip search
 --resume             Continue an interrupted search from where it left off
 --backend <name>     Override proposer backend without editing config
---strategy <name>    Override parent selection: best | tournament | all
+--strategy <name>    Override parent selection: best | tournament | all | pareto
+--ensemble b1,b2,... Pick among multiple backends per iteration via a UCB bandit
 ```
 
 ### `ph wrap` options

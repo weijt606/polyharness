@@ -4,7 +4,49 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.2.1] - 2026-04-09
+## [0.2.2] - 2026-05-24
+
+### Added
+- **Pareto-frontier parent selection** (`parent_selection: pareto`) — samples
+  parents from the set of per-task winners instead of always branching from the
+  single overall-best candidate, keeping specialists alive as stepping stones to
+  avoid premature convergence. Inspired by GEPA (arXiv:2507.19457). Reuses the
+  per-task scores already stored in the search log — no new data collected.
+- **Code novelty rejection** (`novelty_filter`, `novelty_threshold`,
+  `novelty_max_retries`) — detects near-duplicate candidates via stdlib
+  `difflib` text similarity (no new dependencies) and skips their evaluation to
+  save API/compute budget. Inspired by ShinkaEvolve (arXiv:2509.19349). Off by
+  default.
+- **Adaptive backend ensemble** (`proposer.ensemble`, `proposer.bandit_c`,
+  `ph run --ensemble b1,b2,...`) — when several backends are listed, a UCB1
+  bandit picks one per iteration and shifts picks toward backends that produce
+  *improving* candidates. Fully deterministic (no RNG) and adds no new
+  dependencies. Run summary shows a per-backend picks/improve-rate table.
+  Inspired by ShinkaEvolve's adaptive LLM-ensemble selection.
+- **Cascade evaluation** (`evaluator.cascade`, `cascade_threshold`,
+  `cascade_stage1`) — scores a cheap first subset of tasks and only runs the
+  rest if it clears the gate, saving budget on weak candidates (AlphaEvolve/
+  OpenEvolve-style). Per-task mode only; the base harness is always scored in
+  full. Off by default.
+- **Reproducible runs** (`search.seed`) — seeds the RNG so tournament/pareto/
+  novelty regeneration are repeatable across runs.
+- **Observability** — `ph log` marks Pareto-frontier members (◆); `ph leaderboard`
+  adds a Pareto column and a Backend column (shown only when an ensemble was
+  used). `SearchLog.pareto_win_counts()` powers both the CLI and the orchestrator.
+- `proposer_backend` recorded in each candidate's `metadata.json` (ensemble mode)
+- Hermes Agent adapter (`hermes`) — 8th proposer backend (`hermes chat -q`)
+- `--strategy pareto` and `--ensemble` options for `ph run`
+- `proposer/bandit.py` — UCB1 `BackendBandit`
+- 31 new tests (206 total)
+
+### Changed
+- Agent backends: 7 → 8 (added Hermes Agent)
+
+### Removed
+- Stray byte-identical duplicate files (`collector 2.py`, `test_collector 2.py`,
+  `test_evolution 2.py`) that inflated the test count and tripped ruff N999
+
+
 
 ### Added
 - `ph shell-hook install/uninstall/status` — zero-config auto-wrap for agent commands via shell preexec hook

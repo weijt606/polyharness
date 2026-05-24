@@ -241,3 +241,11 @@ def test_apply_best(tmp_path):
     assert (target / "harness.py").read_text() == "# optimized\n"
     assert not (target / "score.json").exists()
     assert not (target / "traces").exists()
+
+
+def test_candidate_metadata(tmp_path):
+    ws = Workspace.init(tmp_path / "ws")
+    ws.store_iteration(0, 0.5, {"A": 0.5}, parent=None, metadata={"proposer_backend": "codex"})
+    assert ws.candidate_metadata(0)["proposer_backend"] == "codex"
+    # Missing candidate → empty dict (no crash).
+    assert ws.candidate_metadata(99) == {}

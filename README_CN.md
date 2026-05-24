@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -52,6 +52,12 @@ PolyHarness 填补了这个空白。它把 Meta-Harness 搜索变成了一个任
 > **可以这样理解：**
 > - 记忆工具（如 Supermemory）赋予 agent 跨会话的持久**记忆**。
 > - **PolyHarness 赋予 agent 持久的自我进化能力**，你可以用可重复运行的方式持续调整它们的工作方式。
+
+### 这波浪潮中的一员——专精 harness
+
+PolyHarness 并非孤例。一批开源项目已经证明：把 LLM 与进化搜索结合，能系统性地改进代码与 prompt——[GEPA](https://github.com/gepa-ai/gepa)（在 Pareto 前沿上做反思式 prompt 进化）、[ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve)（样本高效的程序进化）、[OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve)（AlphaEvolve 的开源实现），以及 [Darwin Gödel Machine](https://sakana.ai/dgm/)（开放式自我改进 agent）。
+
+它们大多进化的是*通用*程序或算法。PolyHarness 是这波浪潮里**专精 agent harness** 的那一员——优化的是包裹在现有 agent *外层*的 prompt、工具配置与编排，并聚焦于**从真实使用中在线进化**（`ph wrap` → `ph evolve`）。它把这些项目中最有效的思路借鉴过来，应用到你自己任务上的任意 CLI agent：Pareto 前沿父代选择（GEPA）、代码新颖性拒绝与自适应后端集成（ShinkaEvolve）、级联评估（AlphaEvolve/OpenEvolve）。
 
 ## PolyHarness 是什么
 
@@ -469,6 +475,16 @@ Proposer 在生成下一个候选之前会读取**所有这些信息**。它能�
 
 当你运行 `ph init --agent claude-code` 时，PolyHarness 会在 workspace 中自动生成 `CLAUDE.md` 指令文件，告诉 agent 如何作为优化 Proposer 工作。`CLAW.md`、`CODEX.md`、`AGENTS.md`（Hermes）、`OPENCODE.md` 也是同样的机制，每个 agent 都使用它自己的原生指令格式。
 
+#### 后端集成（自适应择优）
+
+不确定哪个后端最擅长你的任务？让 PolyHarness 替你试。一次传入多个后端，它会用 **UCB bandit** 每轮挑一个，并逐渐把选择倾向"真正产出改进候选"的后端：
+
+```bash
+ph run --ensemble "claude-code,codex,local"
+```
+
+运行结束会给出每个后端的明细（选中次数 + 改进率）。在给定奖励序列下选择是确定性的，因此运行可复现。该机制借鉴自 ShinkaEvolve 的自适应 LLM 集成选择。
+
 ### 本地模型配置
 
 如果你在本地运行模型（Ollama、vLLM、LM Studio 或任何 OpenAI 兼容服务），使用 `openai` 后端：
@@ -517,10 +533,16 @@ proposer:
 search:
   max_iterations: 20          # 最大搜索迭代次数
   early_stop_patience: 5      # 连续 N 轮无改进后停止
-  parent_selection: best       # 父候选选择策略: best | tournament | all
+  parent_selection: best       # 父候选选择策略: best | tournament | all | pareto
+  novelty_filter: false        # 评估前拒绝近重复候选，节省预算
+  novelty_threshold: 0.97      # 超过此相似度判定为近重复
+  novelty_max_retries: 1       # 跳过前重新生成近重复候选的次数
+  seed: null                   # 随机种子 — 设为整数可让带随机性的搜索可复现
 
 proposer:
   backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
+  ensemble: []                 # 非空时，每轮用 UCB bandit 在这些后端中择优
+  bandit_c: 1.41421356         # UCB 探索常数（越大越偏探索）
   model: claude-sonnet-4-20250514  # 模型名称（api/openai 后端使用）
   base_url: null               # 自定义 API 端点（openai 后端使用）
   api_key: null                # API 密钥覆盖（null = 使用环境变量）
@@ -532,6 +554,9 @@ evaluator:
   type: python                 # python | docker | custom
   entry: evaluate.py           # 评估脚本入口
   timeout: 300                 # 每个任务的超时时间（秒）
+  cascade: false               # 先评便宜的任务子集，未过门槛则跳过其余（逐任务模式）
+  cascade_threshold: 0.4       # 进入完整任务集所需的第一阶段最低均分
+  cascade_stage1: 0            # 第一阶段任务数（0 = 自动，约占 1/3）
 
 harness:
   language: python             # Harness 代码语言
@@ -599,11 +624,11 @@ python -m polyharness --version
 | `ph init` | 初始化 workspace，自动复制 harness、任务、评估脚本 |
 | `ph run` | 启动优化搜索循环 |
 | `ph status` | 进度表格，包含耗时、改进率和增量 |
-| `ph log` | 搜索树带增量（Δ）列，或用 `--flat` 查看表格视图 |
+| `ph log` | 搜索树带增量（Δ）列和 Pareto 前沿（◆）标记，或用 `--flat` 查看表格视图 |
 | `ph best` | 展示最佳候选：分数、逐任务明细、变更摘要 |
 | `ph compare A B` | 对比两个迭代：分数差异 + 统一代码 diff |
 | `ph diff <N>` | `compare 0 <N>` 的快捷方式 |
-| `ph leaderboard` | 候选排名表（`--top N`、`--tasks` 展开每题分数） |
+| `ph leaderboard` | 候选排名表，含 Pareto（◆）与后端列（`--top N`、`--tasks` 展开每题分数） |
 | `ph trace <N>` | 查看某次迭代的 stdout、stderr、metrics、退出码 |
 | `ph report` | 生成完整 markdown 报告，包含分数趋势和逐任务表格 |
 | `ph apply` | 将最优 harness 回写到 `base_harness/`，或通过 `--target` 指定目录 |
@@ -647,7 +672,8 @@ python -m polyharness --version
 --dry-run            仅评估基线 harness，跳过搜索
 --resume             从上次中断处继续搜索
 --backend <name>     覆盖 proposer 后端，无需修改配置
---strategy <name>    覆盖父候选选择策略: best | tournament | all
+--strategy <name>    覆盖父候选选择策略: best | tournament | all | pareto
+--ensemble b1,b2,... 每轮用 UCB bandit 在多个后端中择优
 ```
 
 ### `ph wrap` 选项

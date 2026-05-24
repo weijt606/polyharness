@@ -201,6 +201,63 @@ def test_log_shows_delta(runner, workspace):
     assert "Δ" in result.output or "delta" in result.output.lower() or "+0.2" in result.output
 
 
+def test_log_marks_pareto_frontier(runner, workspace):
+    """ph log marks per-task winners with the Pareto-frontier glyph."""
+    from polyharness.search_log import SearchLog
+
+    log = SearchLog(workspace.search_log_path)
+    log.append(0, None, 0.5, {"A": 0.5, "B": 0.5})
+    log.append(1, 0, 0.5, {"A": 0.9, "B": 0.1})  # wins A
+    log.append(2, 0, 0.5, {"A": 0.1, "B": 0.9})  # wins B
+
+    result = runner.invoke(main, ["log", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "◆" in result.output
+    assert "Pareto frontier" in result.output
+
+
+def test_log_no_pareto_marker_without_task_scores(runner, workspace):
+    """No frontier glyph when candidates have no per-task scores."""
+    from polyharness.search_log import SearchLog
+
+    log = SearchLog(workspace.search_log_path)
+    log.append(0, None, 0.3, {})
+    log.append(1, 0, 0.5, {})
+
+    result = runner.invoke(main, ["log", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "◆" not in result.output
+
+
+def test_leaderboard_shows_backend_when_recorded(runner, workspace):
+    """ph leaderboard surfaces proposer_backend when an ensemble was used."""
+    from polyharness.search_log import SearchLog
+
+    log = SearchLog(workspace.search_log_path)
+    log.append(0, None, 0.3, {"A": 0.3})
+    log.append(1, 0, 0.6, {"A": 0.6})
+    workspace.store_iteration(0, 0.3, {"A": 0.3}, parent=None, metadata={"source": "base"})
+    workspace.store_iteration(1, 0.6, {"A": 0.6}, parent=0, metadata={"proposer_backend": "codex"})
+
+    result = runner.invoke(main, ["leaderboard", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "Backend" in result.output
+    assert "codex" in result.output
+
+
+def test_leaderboard_hides_backend_without_ensemble(runner, workspace):
+    """No Backend column when no candidate recorded a proposer_backend."""
+    from polyharness.search_log import SearchLog
+
+    log = SearchLog(workspace.search_log_path)
+    log.append(0, None, 0.3, {"A": 0.3})
+    log.append(1, 0, 0.6, {"A": 0.6})
+
+    result = runner.invoke(main, ["leaderboard", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0
+    assert "Backend" not in result.output
+
+
 # --- ph run --resume ---
 
 
