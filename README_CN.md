@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-194%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -469,6 +469,16 @@ Proposer 在生成下一个候选之前会读取**所有这些信息**。它能�
 
 当你运行 `ph init --agent claude-code` 时，PolyHarness 会在 workspace 中自动生成 `CLAUDE.md` 指令文件，告诉 agent 如何作为优化 Proposer 工作。`CLAW.md`、`CODEX.md`、`AGENTS.md`（Hermes）、`OPENCODE.md` 也是同样的机制，每个 agent 都使用它自己的原生指令格式。
 
+#### 后端集成（自适应择优）
+
+不确定哪个后端最擅长你的任务？让 PolyHarness 替你试。一次传入多个后端，它会用 **UCB bandit** 每轮挑一个，并逐渐把选择倾向"真正产出改进候选"的后端：
+
+```bash
+ph run --ensemble "claude-code,codex,local"
+```
+
+运行结束会给出每个后端的明细（选中次数 + 改进率）。在给定奖励序列下选择是确定性的，因此运行可复现。该机制借鉴自 ShinkaEvolve 的自适应 LLM 集成选择。
+
 ### 本地模型配置
 
 如果你在本地运行模型（Ollama、vLLM、LM Studio 或任何 OpenAI 兼容服务），使用 `openai` 后端：
@@ -517,10 +527,16 @@ proposer:
 search:
   max_iterations: 20          # 最大搜索迭代次数
   early_stop_patience: 5      # 连续 N 轮无改进后停止
-  parent_selection: best       # 父候选选择策略: best | tournament | all
+  parent_selection: best       # 父候选选择策略: best | tournament | all | pareto
+  novelty_filter: false        # 评估前拒绝近重复候选，节省预算
+  novelty_threshold: 0.97      # 超过此相似度判定为近重复
+  novelty_max_retries: 1       # 跳过前重新生成近重复候选的次数
+  seed: null                   # 随机种子 — 设为整数可让带随机性的搜索可复现
 
 proposer:
   backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
+  ensemble: []                 # 非空时，每轮用 UCB bandit 在这些后端中择优
+  bandit_c: 1.41421356         # UCB 探索常数（越大越偏探索）
   model: claude-sonnet-4-20250514  # 模型名称（api/openai 后端使用）
   base_url: null               # 自定义 API 端点（openai 后端使用）
   api_key: null                # API 密钥覆盖（null = 使用环境变量）
@@ -647,7 +663,8 @@ python -m polyharness --version
 --dry-run            仅评估基线 harness，跳过搜索
 --resume             从上次中断处继续搜索
 --backend <name>     覆盖 proposer 后端，无需修改配置
---strategy <name>    覆盖父候选选择策略: best | tournament | all
+--strategy <name>    覆盖父候选选择策略: best | tournament | all | pareto
+--ensemble b1,b2,... 每轮用 UCB bandit 在多个后端中择优
 ```
 
 ### `ph wrap` 选项

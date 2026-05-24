@@ -247,9 +247,15 @@ def init(
 )
 @click.option(
     "--strategy",
-    type=click.Choice(["best", "tournament", "all"], case_sensitive=False),
+    type=click.Choice(["best", "tournament", "all", "pareto"], case_sensitive=False),
     default=None,
     help="Override parent selection strategy.",
+)
+@click.option(
+    "--ensemble",
+    default=None,
+    metavar="b1,b2,...",
+    help="Comma-separated backends to pick among per iteration via a UCB bandit.",
 )
 def run(
     workspace: str,
@@ -258,6 +264,7 @@ def run(
     resume: bool,
     backend: str | None,
     strategy: str | None,
+    ensemble: str | None,
 ):
     """Start the optimization search loop."""
     from polyharness.orchestrator import Orchestrator
@@ -274,6 +281,16 @@ def run(
 
     if backend is not None:
         config.proposer.backend = backend  # type: ignore[assignment]
+
+    if ensemble is not None:
+        names = [b.strip() for b in ensemble.split(",") if b.strip()]
+        try:
+            # Validate against the config model (rejects unknown backend names).
+            config.proposer.ensemble = names  # type: ignore[assignment]
+            config = config.model_validate(config.model_dump())
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] Invalid --ensemble value: {exc}")
+            raise SystemExit(1)
 
     if strategy is not None:
         config.search.parent_selection = strategy  # type: ignore[assignment]

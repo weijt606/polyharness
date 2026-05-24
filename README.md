@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-194%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -469,6 +469,16 @@ The Proposer reads **all of this** before generating the next candidate. It can 
 
 When you run `ph init --agent claude-code`, PolyHarness automatically generates a `CLAUDE.md` instruction file in the workspace, telling the agent how to behave as an optimization Proposer. Same for `CLAW.md`, `CODEX.md`, `AGENTS.md` (Hermes), `OPENCODE.md` — each agent's native instruction format.
 
+#### Backend ensemble (adaptive selection)
+
+Don't know which backend writes the best harness changes for your task? Let PolyHarness find out. Pass several and it picks one per iteration with a **UCB bandit**, shifting picks toward whichever backend actually produces *improving* candidates:
+
+```bash
+ph run --ensemble "claude-code,codex,local"
+```
+
+At the end of the run you get a per-backend breakdown (picks + improve-rate). Selection is deterministic given the reward sequence, so runs stay reproducible. Inspired by ShinkaEvolve's adaptive LLM-ensemble selection.
+
 ### Local Model Setup
 
 If you're running a local model (Ollama, vLLM, LM Studio, or any OpenAI-compatible server), use the `openai` backend:
@@ -517,10 +527,16 @@ After `ph init`, the workspace has a `config.yaml` with these sections:
 search:
   max_iterations: 20          # Maximum search iterations
   early_stop_patience: 5      # Stop after N iterations with no improvement
-  parent_selection: best       # Strategy: best | tournament | all
+  parent_selection: best       # Strategy: best | tournament | all | pareto
+  novelty_filter: false        # Reject near-duplicate candidates before eval (saves budget)
+  novelty_threshold: 0.97      # Similarity ratio above which a candidate is a near-duplicate
+  novelty_max_retries: 1       # Regenerate a near-duplicate this many times before skipping
+  seed: null                   # RNG seed — set an int to make randomized runs reproducible
 
 proposer:
   backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
+  ensemble: []                 # If non-empty, pick among these backends per iteration via a UCB bandit
+  bandit_c: 1.41421356         # UCB exploration constant (higher = more exploration)
   model: claude-sonnet-4-20250514  # Model name (for api/openai backends)
   base_url: null               # Custom API endpoint (for openai backend)
   api_key: null                # API key override (null = use env var)
@@ -647,7 +663,8 @@ python -m polyharness --version
 --dry-run            Only evaluate the base harness, skip search
 --resume             Continue an interrupted search from where it left off
 --backend <name>     Override proposer backend without editing config
---strategy <name>    Override parent selection: best | tournament | all
+--strategy <name>    Override parent selection: best | tournament | all | pareto
+--ensemble b1,b2,... Pick among multiple backends per iteration via a UCB bandit
 ```
 
 ### `ph wrap` options

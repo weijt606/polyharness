@@ -1,6 +1,6 @@
 {
   "name": "polyharness",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Make your AI agent evolve automatically through iterative harness optimization.",
   "keywords": ["agent", "harness", "optimization", "meta-harness", "cli"],
   "license": "MIT",

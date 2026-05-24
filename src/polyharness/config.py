@@ -8,6 +8,13 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
+# Single source of truth for proposer backend names. Used by both the fixed
+# `backend` field and the optional `ensemble` list (which gets validation for
+# free by reusing this Literal alias).
+BackendName = Literal[
+    "api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "local"
+]
+
 
 class SearchConfig(BaseModel):
     """Search loop parameters."""
@@ -16,16 +23,65 @@ class SearchConfig(BaseModel):
     early_stop_patience: int = Field(
         default=5, ge=1, description="Stop after N iterations without improvement."
     )
-    parent_selection: Literal["best", "tournament", "all"] = Field(
-        default="best", description="Parent candidate selection strategy."
+    seed: int | None = Field(
+        default=None,
+        description=(
+            "Optional RNG seed. When set, randomized strategies (tournament, "
+            "pareto, novelty regeneration) become reproducible across runs."
+        ),
+    )
+    parent_selection: Literal["best", "tournament", "all", "pareto"] = Field(
+        default="best",
+        description=(
+            "Parent candidate selection strategy. "
+            "'pareto' samples from the per-task winners (GEPA-style frontier) "
+            "to avoid premature convergence to a single overall-best candidate."
+        ),
+    )
+    novelty_filter: bool = Field(
+        default=False,
+        description=(
+            "Reject near-duplicate candidates before evaluation to save budget "
+            "(ShinkaEvolve-style novelty rejection). Off by default."
+        ),
+    )
+    novelty_threshold: float = Field(
+        default=0.97,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Text-similarity ratio (0–1) above which a candidate is treated as a "
+            "near-duplicate of an earlier one. Higher = stricter (fewer rejections)."
+        ),
+    )
+    novelty_max_retries: int = Field(
+        default=1,
+        ge=0,
+        description=(
+            "How many times to regenerate a near-duplicate candidate before "
+            "skipping its evaluation entirely."
+        ),
     )
 
 
 class ProposerConfig(BaseModel):
     """Proposer agent configuration."""
 
-    backend: Literal["api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "local"] = Field(
+    backend: BackendName = Field(
         default="api", description="Proposer backend type."
+    )
+    ensemble: list[BackendName] = Field(
+        default_factory=list,
+        description=(
+            "Optional list of backends. When non-empty, the orchestrator picks a "
+            "backend per iteration via a UCB bandit that favors backends producing "
+            "improving candidates. Empty (default) = always use `backend`."
+        ),
+    )
+    bandit_c: float = Field(
+        default=1.41421356,
+        ge=0.0,
+        description="UCB exploration constant for ensemble selection. Higher = more exploration.",
     )
     model: str = Field(
         default="claude-sonnet-4-20250514", description="Model for the Proposer agent."
