@@ -2,14 +2,20 @@
   "name": "polyharness",
   "version": "0.2.2",
   "description": "Make your AI agent evolve automatically through iterative harness optimization.",
-  "keywords": ["agent", "harness", "optimization", "meta-harness", "cli"],
+  "keywords": [
+    "agent",
+    "harness",
+    "optimization",
+    "meta-harness",
+    "cli"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/weijt606/polyharness.git"
+    "url": "git+https://github.com/weijt606/polyharness.git"
   },
   "bin": {
-    "ph": "./bin/ph.mjs"
+    "ph": "bin/ph.mjs"
   },
   "files": [
     "bin/"
