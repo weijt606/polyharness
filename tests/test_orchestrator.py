@@ -441,6 +441,89 @@ def test_seed_makes_search_reproducible(tmp_path):
     assert run_once(tmp_path / "a") == run_once(tmp_path / "b")
 
 
+class PerTaskEvaluator(BaseEvaluator):
+    """Evaluator that scores by task name and records which task lists it ran."""
+
+    def __init__(self, task_scores):
+        self.task_scores = task_scores
+        self.calls: list[list[str]] = []
+
+    def evaluate(self, candidate_dir, tasks):
+        from pathlib import Path
+
+        stems = [Path(t).stem for t in tasks]
+        self.calls.append(stems)
+        ts = {s: self.task_scores.get(s, 0.0) for s in stems}
+        overall = sum(ts.values()) / len(ts) if ts else 0.0
+        return EvalResult(overall_score=overall, task_scores=ts)
+
+
+def _cascade_config(ws, **overrides):
+    config = ws.load_config()
+    config.search.max_iterations = 2
+    config.search.early_stop_patience = 10
+    config.evaluator.tasks = ["t1.json", "t2.json", "t3.json", "t4.json"]
+    config.evaluator.cascade = True
+    config.evaluator.cascade_stage1 = 2
+    config.evaluator.cascade_threshold = 0.5
+    for k, v in overrides.items():
+        setattr(config.evaluator, k, v)
+    return config
+
+
+def test_cascade_gates_weak_candidate(tmp_path):
+    """A candidate failing stage 1 should never trigger stage-2 evaluation."""
+    ws = _setup_workspace(tmp_path)
+    config = _cascade_config(ws)
+    ev = PerTaskEvaluator({"t1": 0.3, "t2": 0.3, "t3": 0.9, "t4": 0.9})
+
+    Orchestrator(ws, config, proposer=MockProposer(), evaluator=ev).run()
+
+    # Base harness is scored in full (cascade never applies to it).
+    assert ev.calls[0] == ["t1", "t2", "t3", "t4"]
+    # Candidates run only stage 1 and are gated → stage 2 never runs alone.
+    assert ["t1", "t2"] in ev.calls
+    assert ["t3", "t4"] not in ev.calls
+
+
+def test_cascade_runs_full_for_strong_candidate(tmp_path):
+    """A candidate clearing stage 1 should proceed to the full task set."""
+    ws = _setup_workspace(tmp_path)
+    config = _cascade_config(ws)
+    ev = PerTaskEvaluator({"t1": 0.8, "t2": 0.8, "t3": 0.8, "t4": 0.8})
+
+    orch = Orchestrator(ws, config, proposer=MockProposer(), evaluator=ev)
+    orch.run()
+
+    assert ["t1", "t2"] in ev.calls  # stage 1
+    assert ["t3", "t4"] in ev.calls  # stage 2 ran too
+    cand = next(e for e in orch.search_log.entries if e.iteration == 1)
+    assert set(cand.task_scores) == {"t1", "t2", "t3", "t4"}
+
+
+def test_cascade_disabled_runs_full(tmp_path):
+    """With cascade off, every evaluation uses the full task list."""
+    ws = _setup_workspace(tmp_path)
+    config = _cascade_config(ws, cascade=False)
+    ev = PerTaskEvaluator({"t1": 0.3, "t2": 0.3, "t3": 0.9, "t4": 0.9})
+
+    Orchestrator(ws, config, proposer=MockProposer(), evaluator=ev).run()
+
+    assert ["t1", "t2"] not in ev.calls
+    assert all(call == ["t1", "t2", "t3", "t4"] for call in ev.calls)
+
+
+def test_cascade_base_always_full(tmp_path):
+    """The base harness is fully evaluated even when candidates are gated."""
+    ws = _setup_workspace(tmp_path)
+    config = _cascade_config(ws, cascade_threshold=0.99)  # gate every candidate
+    ev = PerTaskEvaluator({"t1": 0.5, "t2": 0.5, "t3": 0.5, "t4": 0.5})
+
+    Orchestrator(ws, config, proposer=MockProposer(), evaluator=ev).run()
+
+    assert ev.calls[0] == ["t1", "t2", "t3", "t4"]
+
+
 def test_orchestrator_error_recovery(tmp_path):
     """Orchestrator should skip failing iterations and continue."""
 

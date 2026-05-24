@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-194%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -548,6 +548,9 @@ evaluator:
   type: python                 # python | docker | custom
   entry: evaluate.py           # 评估脚本入口
   timeout: 300                 # 每个任务的超时时间（秒）
+  cascade: false               # 先评便宜的任务子集，未过门槛则跳过其余（逐任务模式）
+  cascade_threshold: 0.4       # 进入完整任务集所需的第一阶段最低均分
+  cascade_stage1: 0            # 第一阶段任务数（0 = 自动，约占 1/3）
 
 harness:
   language: python             # Harness 代码语言

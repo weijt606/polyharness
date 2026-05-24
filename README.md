@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-194%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -548,6 +548,9 @@ evaluator:
   type: python                 # python | docker | custom
   entry: evaluate.py           # Evaluator script entrypoint
   timeout: 300                 # Per-task timeout in seconds
+  cascade: false               # Stage cheap subset first; skip rest if it fails the gate (per-task mode)
+  cascade_threshold: 0.4       # Min stage-1 mean score required to run the full task set
+  cascade_stage1: 0            # Tasks in stage 1 (0 = auto, ~1/3 of the list)
 
 harness:
   language: python             # Harness code language

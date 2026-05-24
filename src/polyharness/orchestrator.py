@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from polyharness.config import PolyHarnessConfig
-from polyharness.evaluator import BaseEvaluator, create_evaluator
+from polyharness.evaluator import BaseEvaluator, EvalResult, create_evaluator
 from polyharness.proposer import BaseProposer, create_proposer
 from polyharness.proposer.bandit import BackendBandit
 from polyharness.search_log import SearchLog
@@ -275,10 +275,8 @@ class Orchestrator:
         else:
             cand_dir = self.workspace.candidate_path(iteration)
 
-        eval_result = self.evaluator.evaluate(
-            candidate_dir=cand_dir,
-            tasks=self.config.evaluator.tasks,
-        )
+        # Base harness is always scored in full; candidates may use cascade.
+        eval_result = self._run_eval(cand_dir, allow_cascade=not is_base)
 
         parent = None if is_base else self.search_log.best_iteration
         self.search_log.append(
@@ -298,6 +296,47 @@ class Orchestrator:
             )
 
         return eval_result.overall_score
+
+    def _run_eval(self, cand_dir, *, allow_cascade: bool) -> EvalResult:
+        """Evaluate a candidate, applying cascade when enabled and applicable."""
+        tasks = self.config.evaluator.tasks
+        if allow_cascade and self.config.evaluator.cascade and len(tasks) >= 2:
+            return self._evaluate_with_cascade(cand_dir, tasks)
+        return self.evaluator.evaluate(candidate_dir=cand_dir, tasks=tasks)
+
+    def _evaluate_with_cascade(self, cand_dir, tasks: list[str]) -> EvalResult:
+        """Staged evaluation: cheap subset first, full set only if it clears the gate.
+
+        Splits *tasks* into a stage-1 subset and the rest. A candidate whose
+        stage-1 mean falls below ``cascade_threshold`` is rejected early without
+        running stage 2, saving evaluation budget on weak candidates
+        (AlphaEvolve/OpenEvolve-style cascade). Stage-1 tasks are never
+        re-evaluated, so the result is deterministic.
+        """
+        k = self.config.evaluator.cascade_stage1
+        if k <= 0:
+            k = max(1, (len(tasks) + 2) // 3)  # ~1/3 of tasks, rounded up
+        k = min(k, len(tasks) - 1)  # always leave at least one task for stage 2
+
+        stage1, stage2 = tasks[:k], tasks[k:]
+        r1 = self.evaluator.evaluate(candidate_dir=cand_dir, tasks=stage1)
+
+        threshold = self.config.evaluator.cascade_threshold
+        if r1.overall_score < threshold:
+            console.print(
+                f"[dim]  cascade: gated at stage 1 "
+                f"({r1.overall_score:.2f} < {threshold:.2f}) — "
+                f"skipped {len(stage2)} task(s)[/dim]"
+            )
+            return r1
+
+        r2 = self.evaluator.evaluate(candidate_dir=cand_dir, tasks=stage2)
+        task_scores = {**r1.task_scores, **r2.task_scores}
+        traces = {**r1.traces, **r2.traces}
+        overall = (
+            sum(task_scores.values()) / len(task_scores) if task_scores else 0.0
+        )
+        return EvalResult(overall_score=overall, task_scores=task_scores, traces=traces)
 
     def _select_parent(self) -> int:
         """Select parent candidate based on strategy."""

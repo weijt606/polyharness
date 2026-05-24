@@ -37,6 +37,22 @@ def test_parent_selection_accepts_pareto():
     assert cfg.search.parent_selection == "pareto"
 
 
+def test_cascade_defaults_and_roundtrip():
+    cfg = PolyHarnessConfig()
+    assert cfg.evaluator.cascade is False
+    assert cfg.evaluator.cascade_threshold == 0.4
+    assert cfg.evaluator.cascade_stage1 == 0
+
+    cfg.evaluator.cascade = True
+    cfg.evaluator.cascade_stage1 = 3
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "config.yaml"
+        cfg.to_yaml(path)
+        loaded = PolyHarnessConfig.from_yaml(path)
+    assert loaded.evaluator.cascade is True
+    assert loaded.evaluator.cascade_stage1 == 3
+
+
 def test_config_roundtrip_yaml():
     cfg = PolyHarnessConfig()
     cfg.proposer.backend = "claude-code"  # type: ignore[assignment]

@@ -23,13 +23,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   *improving* candidates. Fully deterministic (no RNG) and adds no new
   dependencies. Run summary shows a per-backend picks/improve-rate table.
   Inspired by ShinkaEvolve's adaptive LLM-ensemble selection.
+- **Cascade evaluation** (`evaluator.cascade`, `cascade_threshold`,
+  `cascade_stage1`) — scores a cheap first subset of tasks and only runs the
+  rest if it clears the gate, saving budget on weak candidates (AlphaEvolve/
+  OpenEvolve-style). Per-task mode only; the base harness is always scored in
+  full. Off by default.
 - **Reproducible runs** (`search.seed`) — seeds the RNG so tournament/pareto/
   novelty regeneration are repeatable across runs.
 - `proposer_backend` recorded in each candidate's `metadata.json` (ensemble mode)
 - Hermes Agent adapter (`hermes`) — 8th proposer backend (`hermes chat -q`)
 - `--strategy pareto` and `--ensemble` options for `ph run`
 - `proposer/bandit.py` — UCB1 `BackendBandit`
-- 19 new tests (194 total)
+- 24 new tests (199 total)
 
 ### Changed
 - Agent backends: 7 → 8 (added Hermes Agent)

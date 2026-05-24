@@ -108,6 +108,29 @@ class EvaluatorConfig(BaseModel):
     entry: str = Field(default="evaluate.py", description="Evaluator script entrypoint.")
     timeout: int = Field(default=300, ge=1, description="Per-task timeout in seconds.")
     tasks: list[str] = Field(default_factory=list, description="Task file paths.")
+    cascade: bool = Field(
+        default=False,
+        description=(
+            "Staged evaluation: score a cheap first subset of tasks, and only run "
+            "the rest if that subset clears `cascade_threshold` (AlphaEvolve/"
+            "OpenEvolve-style cascade). Saves budget on weak candidates. Requires "
+            "per-task mode (a non-empty `tasks` list); ignored otherwise."
+        ),
+    )
+    cascade_threshold: float = Field(
+        default=0.4,
+        ge=0.0,
+        le=1.0,
+        description="Minimum stage-1 mean score required to proceed to the full task set.",
+    )
+    cascade_stage1: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of tasks in the cheap first stage. 0 = auto (about one third "
+            "of the task list, leaving at least one task for stage 2)."
+        ),
+    )
 
 
 class HarnessConfig(BaseModel):
