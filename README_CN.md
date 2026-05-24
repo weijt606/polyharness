@@ -53,6 +53,12 @@ PolyHarness 填补了这个空白。它把 Meta-Harness 搜索变成了一个任
 > - 记忆工具（如 Supermemory）赋予 agent 跨会话的持久**记忆**。
 > - **PolyHarness 赋予 agent 持久的自我进化能力**，你可以用可重复运行的方式持续调整它们的工作方式。
 
+### 这波浪潮中的一员——专精 harness
+
+PolyHarness 并非孤例。一批开源项目已经证明：把 LLM 与进化搜索结合，能系统性地改进代码与 prompt——[GEPA](https://github.com/gepa-ai/gepa)（在 Pareto 前沿上做反思式 prompt 进化）、[ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve)（样本高效的程序进化）、[OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve)（AlphaEvolve 的开源实现），以及 [Darwin Gödel Machine](https://sakana.ai/dgm/)（开放式自我改进 agent）。
+
+它们大多进化的是*通用*程序或算法。PolyHarness 是这波浪潮里**专精 agent harness** 的那一员——优化的是包裹在现有 agent *外层*的 prompt、工具配置与编排，并聚焦于**从真实使用中在线进化**（`ph wrap` → `ph evolve`）。它把这些项目中最有效的思路借鉴过来，应用到你自己任务上的任意 CLI agent：Pareto 前沿父代选择（GEPA）、代码新颖性拒绝与自适应后端集成（ShinkaEvolve）、级联评估（AlphaEvolve/OpenEvolve）。
+
 ## PolyHarness 是什么
 
 PolyHarness 是一个通过迭代评估与搜索来探索 agent harness 变体的开源引擎。

@@ -53,6 +53,12 @@ PolyHarness fills that gap. It's the open-source engine that makes Meta-Harness 
 > - Memory tools (like Supermemory) give agents persistent **memory** across conversations.
 > - **PolyHarness gives agents persistent self-evolution** — you get a repeatable way to refine how they work over time.
 
+### Part of a wave — specialized for harnesses
+
+PolyHarness doesn't stand alone. A wave of open-source projects has shown that pairing LLMs with evolutionary search systematically improves code and prompts: [GEPA](https://github.com/gepa-ai/gepa) (reflective prompt evolution over a Pareto frontier), [ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve) (sample-efficient program evolution), [OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve) (an open AlphaEvolve), and the [Darwin Gödel Machine](https://sakana.ai/dgm/) (open-ended self-improving agents).
+
+Most of these evolve *general* programs or algorithms. PolyHarness is the member of this wave **specialized for agent harnesses** — the prompts, tool config, and orchestration *around* an existing agent — with a focus on **online evolution from real usage** (`ph wrap` → `ph evolve`). It borrows the strongest ideas from these projects and applies them to any CLI agent on your own tasks: Pareto-frontier parent selection (GEPA), code-novelty rejection and an adaptive backend ensemble (ShinkaEvolve), and cascade evaluation (AlphaEvolve/OpenEvolve).
+
 ## What PolyHarness Is
 
 PolyHarness is the open-source engine for iteratively searching over an agent's harness.
