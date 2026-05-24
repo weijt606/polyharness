@@ -6,6 +6,10 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+  id-token: write   # OIDC: required for npm trusted publishing (no stored token)
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -14,10 +18,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "22"
           registry-url: 'https://registry.npmjs.org'
 
+      # Trusted publishing needs npm >= 11.5.1; Node 22 ships an older npm.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      # OIDC trusted publishing — no NODE_AUTH_TOKEN. Provenance is automatic.
       - name: Publish to npm
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
