@@ -1,6 +1,8 @@
 """OpenCode CLI adapter.
 
-Invokes the open-source `opencode` CLI agent.
+Invokes the open-source `opencode` CLI agent in non-interactive mode via the
+`run` subcommand (the old top-level `-p` flag is no longer supported upstream).
+See: opencode.ai/docs/cli
 """
 
 from __future__ import annotations
@@ -23,6 +25,6 @@ class OpenCodeAdapter(CLIAdapter):
         binary = cli_path or self.default_binary
         return [
             binary,
-            "-p",                # prompt mode
+            "run",               # non-interactive mode (replaces old -p)
             prompt,
         ]

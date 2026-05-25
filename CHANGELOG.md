@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.3] - 2026-05-26
+
+### Fixed
+- **Codex adapter** — switched to `codex exec` headless mode; the old
+  `codex --quiet --auto-edit` invocation was removed upstream. Also adds
+  `--skip-git-repo-check` (the optimization workspace isn't a git repo) and
+  `--sandbox workspace-write` (lets the agent edit within the workspace).
+- **OpenCode adapter** — switched to the `opencode run` subcommand; the
+  top-level `-p` flag is no longer supported upstream.
+- **Claude Code adapter** — add `--permission-mode acceptEdits` so the agent can
+  actually write candidate files in headless `-p` mode (recent Claude Code blocks
+  edits without it); drop `--verbose` (noise in print mode).
+
+### Changed
+- **Claude Code adapter** now pins `--model claude-opus-4-7` (Opus 4.7,
+  highest-capability) for the Proposer.
+- Default proposer model `claude-sonnet-4-20250514` → `claude-sonnet-4-6`
+  (affects `api`/`openai` backends; other CLI backends use their own model).
+- Verified `claude-code` (`claude -p`) and `hermes` (`hermes chat -q`) are still
+  current; `claw-code` mirrors Claude Code (unverified, low usage).
+- Docs (README / README_CN / technical-architecture) updated to the current CLI
+  invocations.
+
 ## [0.2.2] - 2026-05-24
 
 ### Added

@@ -50,6 +50,14 @@ def test_claude_code_command():
     assert cmd[0] == "claude"
     assert "-p" in cmd
     assert "do stuff" in cmd
+    # Pinned to Opus 4.7
+    assert "--model" in cmd
+    assert "claude-opus-4-7" in cmd
+    # Headless edits must be auto-approved or the agent can't write candidates
+    assert "--permission-mode" in cmd
+    assert "acceptEdits" in cmd
+    # --verbose is noise in print mode; should be gone
+    assert "--verbose" not in cmd
 
 
 def test_claude_code_custom_path():
@@ -70,7 +78,9 @@ def test_codex_command():
     adapter = CodexAdapter()
     cmd = adapter.build_command("fix it")
     assert cmd[0] == "codex"
-    assert "--quiet" in cmd
+    assert "exec" in cmd                    # headless mode (replaces old --quiet)
+    assert "--skip-git-repo-check" in cmd   # workspace isn't a git repo
+    assert "--quiet" not in cmd             # removed upstream
     assert "fix it" in cmd
 
 
@@ -78,6 +88,8 @@ def test_opencode_command():
     adapter = OpenCodeAdapter()
     cmd = adapter.build_command("optimize")
     assert cmd[0] == "opencode"
+    assert "run" in cmd          # non-interactive subcommand (replaces old -p)
+    assert "-p" not in cmd       # no longer supported upstream
     assert "optimize" in cmd
 
 
