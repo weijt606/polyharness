@@ -50,6 +50,14 @@ def test_claude_code_command():
     assert cmd[0] == "claude"
     assert "-p" in cmd
     assert "do stuff" in cmd
+    # Pinned to Opus 4.7
+    assert "--model" in cmd
+    assert "claude-opus-4-7" in cmd
+    # Headless edits must be auto-approved or the agent can't write candidates
+    assert "--permission-mode" in cmd
+    assert "acceptEdits" in cmd
+    # --verbose is noise in print mode; should be gone
+    assert "--verbose" not in cmd
 
 
 def test_claude_code_custom_path():
