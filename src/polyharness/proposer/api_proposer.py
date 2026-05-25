@@ -123,7 +123,7 @@ class APIProposer(BaseProposer):
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-sonnet-4-6",
         max_tokens: int = 16384,
         temperature: float = 0.7,
     ):

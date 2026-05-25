@@ -159,7 +159,7 @@ search:
 
 # Proposer 配置
 proposer:
-  model: "claude-sonnet-4-20250514"     # Proposer 模型
+  model: "claude-sonnet-4-6"     # Proposer 模型
   max_tokens: 16384            # 单次输出上限
   temperature: 0.7             # 生成温度
   backend: "api"               # api | claude-code | claw-code
@@ -222,7 +222,7 @@ harness:
 {
   "iteration": 3,
   "parent": "iter_1",
-  "proposer_model": "claude-sonnet-4-20250514",
+  "proposer_model": "claude-sonnet-4-6",
   "proposer_reasoning": "iter_1 在 task_002 上失败因为缺少 retry 逻辑...",
   "changes_summary": "添加了 exponential backoff retry 到 API 调用层",
   "timestamp": "2026-04-02T14:30:00Z"
@@ -1254,7 +1254,7 @@ ablation:
 ```yaml
 proposer:
   model: "claude-haiku-4-20250414"    # 低成本模式
-  # model: "claude-sonnet-4-20250514"  # 平衡模式
+  # model: "claude-sonnet-4-6"  # 平衡模式
   # model: "claude-opus-4-20250514"    # 最强模式（论文设置）
 ```
 

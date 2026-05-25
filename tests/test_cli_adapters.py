@@ -70,7 +70,9 @@ def test_codex_command():
     adapter = CodexAdapter()
     cmd = adapter.build_command("fix it")
     assert cmd[0] == "codex"
-    assert "--quiet" in cmd
+    assert "exec" in cmd                    # headless mode (replaces old --quiet)
+    assert "--skip-git-repo-check" in cmd   # workspace isn't a git repo
+    assert "--quiet" not in cmd             # removed upstream
     assert "fix it" in cmd
 
 
@@ -78,6 +80,8 @@ def test_opencode_command():
     adapter = OpenCodeAdapter()
     cmd = adapter.build_command("optimize")
     assert cmd[0] == "opencode"
+    assert "run" in cmd          # non-interactive subcommand (replaces old -p)
+    assert "-p" not in cmd       # no longer supported upstream
     assert "optimize" in cmd
 
 

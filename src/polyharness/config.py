@@ -84,7 +84,8 @@ class ProposerConfig(BaseModel):
         description="UCB exploration constant for ensemble selection. Higher = more exploration.",
     )
     model: str = Field(
-        default="claude-sonnet-4-20250514", description="Model for the Proposer agent."
+        default="claude-sonnet-4-6",
+        description="Model for the Proposer agent (api/openai backends; CLI backends use their own).",
     )
     base_url: str | None = Field(
         default=None, description="Optional base URL for the API (useful for local models)."

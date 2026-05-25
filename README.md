@@ -303,9 +303,9 @@ Just add `ph wrap --auto-evolve` in front of your agent command (pick the one ma
 # CLI agent backends — wrap the agent you already use
 ph wrap --auto-evolve claude -p "Refactor the auth module to use JWT"   # Claude Code
 ph wrap --auto-evolve claw -p "Write integration tests for payments"     # Claw Code
-ph wrap --auto-evolve codex "Add retry logic to the API client"          # Codex
+ph wrap --auto-evolve codex exec "Add retry logic to the API client"          # Codex
 ph wrap --auto-evolve hermes chat -q "Refactor the DB connection pool"   # Hermes Agent
-ph wrap --auto-evolve opencode -p "Fix the flaky parser test"            # OpenCode
+ph wrap --auto-evolve opencode run "Fix the flaky parser test"            # OpenCode
 
 # Local models — wrap the CLI command directly
 ph wrap --auto-evolve ollama run gemma3 "Summarize this document"         # Ollama
@@ -373,9 +373,9 @@ After that, just use your agent as usual:
 ```bash
 claude -p "Refactor auth to JWT"        # automatically becomes: ph wrap --auto-evolve claude -p ...
 claw -p "Write payment tests"            # same — auto-wrapped
-codex "Add retry logic"                  # same
+codex exec "Add retry logic"                  # same
 hermes chat -q "Refactor pool"           # same
-opencode -p "Fix flaky test"             # same
+opencode run "Fix flaky test"             # same
 ```
 
 How it works: a `preexec` hook in your shell detects `claude`/`claw`/`codex`/`hermes`/`opencode` commands and transparently redirects them through `ph wrap --auto-evolve`. Your output is unchanged.
@@ -466,9 +466,9 @@ The Proposer reads **all of this** before generating the next candidate. It can 
 | `openai` | — | OpenAI-compatible API (Ollama, vLLM, LM Studio, etc). Needs `OPENAI_API_KEY` |
 | `claude-code` | `claude -p` | Official Claude Code CLI (Pro/Teams subscription) |
 | `claw-code` | `claw -p` | Open-source Claw Code CLI |
-| `codex` | `codex --quiet` | OpenAI Codex CLI |
+| `codex` | `codex exec` | OpenAI Codex CLI |
 | `hermes` | `hermes chat -q` | Nous Research [Hermes Agent](https://github.com/NousResearch/hermes-agent) CLI |
-| `opencode` | `opencode -p` | OpenCode CLI |
+| `opencode` | `opencode run` | OpenCode CLI |
 | `local` | — | Offline rule-based engine for development & testing |
 
 `ph doctor` auto-detects all available backends and shows their status.
@@ -543,7 +543,7 @@ proposer:
   backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
   ensemble: []                 # If non-empty, pick among these backends per iteration via a UCB bandit
   bandit_c: 1.41421356         # UCB exploration constant (higher = more exploration)
-  model: claude-sonnet-4-20250514  # Model name (for api/openai backends)
+  model: claude-sonnet-4-6  # Model name (for api/openai backends)
   base_url: null               # Custom API endpoint (for openai backend)
   api_key: null                # API key override (null = use env var)
   max_tokens: 16384            # Max output tokens per proposer turn
@@ -772,9 +772,9 @@ polyharness/
 │   │   └── adapters/            # Per-agent CLI adapters
 │   │       ├── claude_code.py   # claude -p
 │   │       ├── claw_code.py     # claw -p
-│   │       ├── codex.py         # codex --quiet --auto-edit
+│   │       ├── codex.py         # codex exec
 │   │       ├── hermes.py        # hermes chat -q
-│   │       └── opencode.py      # opencode -p
+│   │       └── opencode.py      # opencode run
 │   └── templates/               # 5 built-in task templates
 │       ├── text-classification/
 │       ├── math-word-problems/
