@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added an **Acknowledgments** section (README / README_CN) crediting the open
   works PolyHarness borrows ideas from and stating that **no third-party code is
   bundled**; CONTRIBUTING documents the attribution policy.
+- Updated the `ph shell-hook install` help text to the current agent invocations
+  (`codex exec`, `opencode run`) — a leftover from the v0.2.3 adapter refresh.
 
 ## [0.2.3] - 2026-05-26
 

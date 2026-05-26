@@ -1931,7 +1931,7 @@ def install(rc: str | None):
     """Install shell hook to auto-wrap agent commands.
 
     Adds a preexec hook to your shell rc file so that commands like
-    `claude -p ...`, `claw -p ...`, `codex ...`, `hermes chat -q ...`, `opencode -p ...`
+    `claude -p ...`, `claw -p ...`, `codex exec ...`, `hermes chat -q ...`, `opencode run ...`
     are automatically wrapped with `ph wrap --auto-evolve`.
     """
     rc_path = Path(rc) if rc else _detect_shell_rc()
