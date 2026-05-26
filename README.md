@@ -815,6 +815,20 @@ ruff check src/ tests/       # lint
 
 <p align="center"><strong>Give your agent self-evolution. It's about time.</strong></p>
 
+## Acknowledgments
+
+PolyHarness **bundles no third-party source code**. Its techniques are
+independently re-implemented from public papers, docs, and open-source repos,
+and attributed inline in the code where relevant:
+
+- [Stanford Meta-Harness](https://github.com/stanford-iris-lab/meta-harness) (MIT) — the harness-search formulation, the proposer "improvement principles", and the held-out val/test methodology.
+- [GEPA](https://github.com/gepa-ai/gepa) — Pareto-frontier candidate selection.
+- [ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve) — code-novelty rejection and adaptive (bandit) backend selection.
+- [OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve) / AlphaEvolve — cascade evaluation.
+- [Darwin Gödel Machine](https://sakana.ai/dgm/) — open-ended self-improvement framing.
+
+Ideas are borrowed; no code is copied. All projects and trademarks belong to their respective owners.
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE). © 2026 weijt606.

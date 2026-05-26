@@ -38,6 +38,17 @@ ruff check src/ tests/
 3. Ensure `ruff check` and `pytest` pass before submitting.
 4. Keep PRs focused — one feature or fix per PR.
 
+## Third-party code & attribution
+
+PolyHarness ships **no vendored third-party source**. When you borrow an idea
+from another project:
+
+- Re-implement it in our own code; do **not** copy source from a licensed
+  project without preserving its license and copyright notice.
+- Attribute the source in an inline comment, and add substantial mechanisms to
+  the **Acknowledgments** section of the README.
+- Borrowing *ideas* from open/MIT works is welcome; vendoring their *code* is not.
+
 ## Reporting Issues
 
 Use [GitHub Issues](https://github.com/weijt606/polyharness/issues). Include:

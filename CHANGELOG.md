@@ -27,6 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Backstory in README / README_CN corrected: the Stanford Meta-Harness framework
   is now open-sourced (MIT); reframed PolyHarness's positioning accordingly and
   linked the official repo.
+- Added an **Acknowledgments** section (README / README_CN) crediting the open
+  works PolyHarness borrows ideas from and stating that **no third-party code is
+  bundled**; CONTRIBUTING documents the attribution policy.
 
 ## [0.2.3] - 2026-05-26
 

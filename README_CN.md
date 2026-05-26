@@ -815,6 +815,18 @@ ruff check src/ tests/       # lint
 
 <p align="center"><strong>给你的 agent 自我进化能力。是时候了。</strong></p>
 
+## 致谢
+
+PolyHarness **不打包任何第三方源代码**。其技术均为依据公开论文、文档与开源仓库**独立重新实现**,并在相关代码处就近注明出处:
+
+- [Stanford Meta-Harness](https://github.com/stanford-iris-lab/meta-harness)（MIT）—— harness 搜索的问题表述、proposer "改进原则"、val/test 留出方法学。
+- [GEPA](https://github.com/gepa-ai/gepa) —— Pareto 前沿父代选择。
+- [ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve) —— 代码新颖性拒绝、自适应（bandit）后端选择。
+- [OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve) / AlphaEvolve —— 级联评估。
+- [Darwin Gödel Machine](https://sakana.ai/dgm/) —— 开放式自我改进的思路。
+
+只借鉴思路,不复制代码。各项目与商标归各自所有者所有。
+
 ## 许可
 
-MIT
+MIT —— 见 [LICENSE](LICENSE)。© 2026 weijt606。
