@@ -524,6 +524,45 @@ def test_cascade_base_always_full(tmp_path):
     assert ev.calls[0] == ["t1", "t2", "t3", "t4"]
 
 
+def test_eval_split_holds_out_test(tmp_path):
+    """With eval_split, search runs on val tasks; the best candidate is scored
+    once on the held-out test tasks at the end."""
+    ws = _setup_workspace(tmp_path)
+    config = ws.load_config()
+    config.search.max_iterations = 3
+    config.search.early_stop_patience = 10
+    config.evaluator.eval_split = True
+    config.evaluator.val_tasks = ["v1.json", "v2.json"]
+    config.evaluator.test_tasks = ["t1.json", "t2.json"]
+    ev = PerTaskEvaluator({"v1": 0.6, "v2": 0.6, "t1": 0.9, "t2": 0.9})
+
+    result = Orchestrator(ws, config, proposer=MockProposer(), evaluator=ev).run()
+
+    # Test tasks are scored exactly once (the held-out final eval), never during search.
+    assert sum(1 for c in ev.calls if c == ["t1", "t2"]) == 1
+    # The search loop (base + candidates) ran on val tasks.
+    assert sum(1 for c in ev.calls if c == ["v1", "v2"]) >= 2
+    # The held-out score is reported and persisted, and never drove selection.
+    assert result.test_score == 0.9
+    holdout = json.loads((ws.summary_dir / "holdout_test.json").read_text())
+    assert holdout["test_overall_score"] == 0.9
+
+
+def test_eval_split_off_by_default(tmp_path):
+    """Without eval_split there is no held-out eval (back-compat)."""
+    ws = _setup_workspace(tmp_path)
+    config = ws.load_config()
+    config.search.max_iterations = 2
+    config.search.early_stop_patience = 10
+
+    result = Orchestrator(
+        ws, config, proposer=MockProposer(), evaluator=MockEvaluator()
+    ).run()
+
+    assert result.test_score is None
+    assert not (ws.summary_dir / "holdout_test.json").exists()
+
+
 def test_orchestrator_error_recovery(tmp_path):
     """Orchestrator should skip failing iterations and continue."""
 

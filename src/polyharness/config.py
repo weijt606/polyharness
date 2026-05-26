@@ -132,6 +132,29 @@ class EvaluatorConfig(BaseModel):
             "of the task list, leaving at least one task for stage 2)."
         ),
     )
+    eval_split: bool = Field(
+        default=False,
+        description=(
+            "Hold out a test set: evolve on `val_tasks`, then evaluate only the best "
+            "candidate once on `test_tasks` at the end (a held-out, honest score that "
+            "never drives selection). Per-task mode only. Off by default = use `tasks` "
+            "throughout."
+        ),
+    )
+    val_tasks: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Task files used DURING search when eval_split is on "
+            "(selection, Pareto, and early-stop all use these)."
+        ),
+    )
+    test_tasks: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Held-out task files; the best candidate is scored on these ONCE at "
+            "the end. Never used for selection."
+        ),
+    )
 
 
 class HarnessConfig(BaseModel):

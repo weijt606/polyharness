@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.2.4] - 2026-05-26
 
 ### Added
+- **Held-out test split** (`evaluator.eval_split`, `val_tasks`, `test_tasks`) —
+  evolve the harness against `val_tasks` (selection, Pareto, and early-stop all
+  use the validation set), then score only the best candidate **once** on the
+  held-out `test_tasks` at the end. The test score never drives selection — it's
+  an honest, post-hoc number that exposes harness overfitting to the eval set
+  (borrowed from the Stanford Meta-Harness reference's val/test methodology).
+  Per-task mode only; off by default. Result shown in the run summary and
+  `ph best`, and persisted to `summary/holdout_test.json`.
 - **Proposer improvement principles** — every Proposer prompt/instruction
   (API, CLI, and the injected `CLAUDE.md`/`AGENTS.md` etc.) now carries shared
   directives distilled from the official Stanford Meta-Harness reference Skill

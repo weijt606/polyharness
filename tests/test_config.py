@@ -53,6 +53,24 @@ def test_cascade_defaults_and_roundtrip():
     assert loaded.evaluator.cascade_stage1 == 3
 
 
+def test_eval_split_defaults_and_roundtrip():
+    cfg = PolyHarnessConfig()
+    assert cfg.evaluator.eval_split is False
+    assert cfg.evaluator.val_tasks == []
+    assert cfg.evaluator.test_tasks == []
+
+    cfg.evaluator.eval_split = True
+    cfg.evaluator.val_tasks = ["tasks/v1.json", "tasks/v2.json"]
+    cfg.evaluator.test_tasks = ["tasks/t1.json"]
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "config.yaml"
+        cfg.to_yaml(path)
+        loaded = PolyHarnessConfig.from_yaml(path)
+    assert loaded.evaluator.eval_split is True
+    assert loaded.evaluator.val_tasks == ["tasks/v1.json", "tasks/v2.json"]
+    assert loaded.evaluator.test_tasks == ["tasks/t1.json"]
+
+
 def test_config_roundtrip_yaml():
     cfg = PolyHarnessConfig()
     cfg.proposer.backend = "claude-code"  # type: ignore[assignment]

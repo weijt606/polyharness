@@ -573,6 +573,19 @@ def best(workspace: str):
     console.print(f"Score: {log.best_score:.4f}")
     console.print(f"Directory: {best_dir}")
 
+    # Held-out test score (only present when eval_split was used)
+    holdout_file = ws.summary_dir / "holdout_test.json"
+    if holdout_file.exists():
+        try:
+            ho = json.loads(holdout_file.read_text())
+            if ho.get("iteration") == best_i and "test_overall_score" in ho:
+                console.print(
+                    f"[bold]Held-out test score:[/bold] {ho['test_overall_score']:.4f} "
+                    "[dim](not used for selection)[/dim]"
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
+
     # Show score details
     score_data = _load_score(best_dir)
     if score_data.get("task_scores"):

@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-207%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -557,6 +557,9 @@ evaluator:
   cascade: false               # 先评便宜的任务子集，未过门槛则跳过其余（逐任务模式）
   cascade_threshold: 0.4       # 进入完整任务集所需的第一阶段最低均分
   cascade_stage1: 0            # 第一阶段任务数（0 = 自动，约占 1/3）
+  eval_split: false            # 留出测试集：在 val_tasks 上进化，末轮在 test_tasks 上评最佳一次（逐任务模式）
+  val_tasks: []                # eval_split 开启时，搜索期间使用的任务文件
+  test_tasks: []               # 留出任务文件；仅末轮对最佳候选评一次
 
 harness:
   language: python             # Harness 代码语言

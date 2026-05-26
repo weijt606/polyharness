@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import random
 import shutil
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ class SearchResult:
     best_iteration: int
     best_score: float
     total_iterations: int
+    test_score: float | None = None  # held-out test score (eval_split only)
 
 
 class Orchestrator:
@@ -85,6 +87,12 @@ class Orchestrator:
             )
         else:
             console.print(f"Proposer backend: {self.config.proposer.backend}")
+        _ecfg = self.config.evaluator
+        if _ecfg.eval_split and _ecfg.val_tasks and _ecfg.test_tasks:
+            console.print(
+                f"Eval split: evolve on {len(_ecfg.val_tasks)} val task(s), "
+                f"held-out {len(_ecfg.test_tasks)} test task(s)"
+            )
         console.print()
 
         # Determine starting point (resume or fresh)
@@ -255,11 +263,13 @@ class Orchestrator:
         if patience_counter >= self.config.search.early_stop_patience:
             console.print("\n[yellow]Early stopping triggered.[/yellow]")
 
-        # Final summary
+        # Final summary (+ held-out test eval of the best candidate, if enabled)
+        test_score = self._evaluate_holdout(best_iteration)
         result = SearchResult(
             best_iteration=best_iteration,
             best_score=best_score,
             total_iterations=len(self.search_log) - 1,
+            test_score=test_score,
         )
         self._print_summary(result)
         return result
@@ -297,12 +307,59 @@ class Orchestrator:
 
         return eval_result.overall_score
 
+    def _search_tasks(self) -> list[str]:
+        """Tasks used during the search loop.
+
+        With ``eval_split`` on, the loop evolves against ``val_tasks`` (held-out
+        ``test_tasks`` are only touched once at the end). Otherwise the regular
+        ``tasks`` list is used.
+        """
+        cfg = self.config.evaluator
+        if cfg.eval_split and cfg.val_tasks:
+            return cfg.val_tasks
+        return cfg.tasks
+
     def _run_eval(self, cand_dir, *, allow_cascade: bool) -> EvalResult:
         """Evaluate a candidate, applying cascade when enabled and applicable."""
-        tasks = self.config.evaluator.tasks
+        tasks = self._search_tasks()
         if allow_cascade and self.config.evaluator.cascade and len(tasks) >= 2:
             return self._evaluate_with_cascade(cand_dir, tasks)
         return self.evaluator.evaluate(candidate_dir=cand_dir, tasks=tasks)
+
+    def _evaluate_holdout(self, best_iteration: int) -> float | None:
+        """Score the best candidate once on the held-out ``test_tasks``.
+
+        Returns the overall test score (or ``None`` when split is off / unavailable).
+        The result never drives selection — it's an honest, post-hoc number. Stored
+        in ``summary/holdout_test.json``.
+        """
+        cfg = self.config.evaluator
+        if not cfg.eval_split or not cfg.test_tasks:
+            return None
+        cand = self.workspace.candidate_path(best_iteration)
+        if not cand.exists():
+            return None
+
+        console.print(
+            f"\n[bold]Held-out test:[/bold] scoring iter_{best_iteration} on "
+            f"{len(cfg.test_tasks)} test task(s) (not used for selection)..."
+        )
+        res = self.evaluator.evaluate(candidate_dir=cand, tasks=cfg.test_tasks)
+
+        self.workspace.summary_dir.mkdir(exist_ok=True)
+        (self.workspace.summary_dir / "holdout_test.json").write_text(
+            json.dumps(
+                {
+                    "iteration": best_iteration,
+                    "test_overall_score": res.overall_score,
+                    "test_task_scores": res.task_scores,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        return res.overall_score
 
     def _evaluate_with_cascade(self, cand_dir, tasks: list[str]) -> EvalResult:
         """Staged evaluation: cheap subset first, full set only if it clears the gate.
@@ -523,7 +580,10 @@ class Orchestrator:
         console.rule("[bold green]Search Complete")
         table = Table(show_header=False)
         table.add_row("Best iteration", f"iter_{result.best_iteration}")
-        table.add_row("Best score", f"{result.best_score:.4f}")
+        score_label = "Best score (val)" if result.test_score is not None else "Best score"
+        table.add_row(score_label, f"{result.best_score:.4f}")
+        if result.test_score is not None:
+            table.add_row("Held-out test score", f"{result.test_score:.4f}")
         table.add_row("Total iterations", str(result.total_iterations))
         console.print(table)
 
