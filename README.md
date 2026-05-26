@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -45,9 +45,9 @@ Stanford's [Meta-Harness paper](https://arxiv.org/abs/2603.28052) (IRIS Lab, 202
 
 The key insight? When you give an AI agent access to *full diagnostic history* — not just the latest score, but every past attempt's code, traces, and failure modes — it can *systematically evolve* its own harness configuration. The paper called this "non-Markovian search" and showed it outperforms simple best-of-N sampling by a wide margin.
 
-But the paper only released the final optimized artifact (`agent.py`). **The search framework itself was never open-sourced.**
+Stanford has since open-sourced the [Meta-Harness framework](https://github.com/stanford-iris-lab/meta-harness) (MIT) — the reference implementation plus the paper's two experiments (text-classification memory search and Terminal-Bench 2 scaffold evolution).
 
-PolyHarness fills that gap. It's the open-source engine that makes Meta-Harness search available to everyone — for any agent, any task, any evaluation pipeline.
+PolyHarness takes the same core idea in a different direction: rather than a reference framework you adapt per experiment, it's a productized, multi-backend CLI that optimizes the harness around *any* CLI agent on *your* tasks — with online evolution from real usage, not just batch runs on a benchmark.
 
 > **Think of it this way:**
 > - Memory tools (like Supermemory) give agents persistent **memory** across conversations.
@@ -557,6 +557,9 @@ evaluator:
   cascade: false               # Stage cheap subset first; skip rest if it fails the gate (per-task mode)
   cascade_threshold: 0.4       # Min stage-1 mean score required to run the full task set
   cascade_stage1: 0            # Tasks in stage 1 (0 = auto, ~1/3 of the list)
+  eval_split: false            # Hold out a test set: evolve on val_tasks, score best on test_tasks once (per-task mode)
+  val_tasks: []                # Task files used during search when eval_split is on
+  test_tasks: []               # Held-out task files; best candidate scored on these once at the end
 
 harness:
   language: python             # Harness code language
@@ -812,6 +815,20 @@ ruff check src/ tests/       # lint
 
 <p align="center"><strong>Give your agent self-evolution. It's about time.</strong></p>
 
+## Acknowledgments
+
+PolyHarness **bundles no third-party source code**. Its techniques are
+independently re-implemented from public papers, docs, and open-source repos,
+and attributed inline in the code where relevant:
+
+- [Stanford Meta-Harness](https://github.com/stanford-iris-lab/meta-harness) (MIT) — the harness-search formulation, the proposer "improvement principles", and the held-out val/test methodology.
+- [GEPA](https://github.com/gepa-ai/gepa) — Pareto-frontier candidate selection.
+- [ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve) — code-novelty rejection and adaptive (bandit) backend selection.
+- [OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve) / AlphaEvolve — cascade evaluation.
+- [Darwin Gödel Machine](https://sakana.ai/dgm/) — open-ended self-improvement framing.
+
+Ideas are borrowed; no code is copied. All projects and trademarks belong to their respective owners.
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE). © 2026 weijt606.

@@ -8,7 +8,7 @@ from typing import Any
 
 import anthropic
 
-from polyharness.proposer.base import BaseProposer
+from polyharness.proposer.base import PROPOSER_PRINCIPLES, BaseProposer
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -115,7 +115,8 @@ Analyze the optimization workspace history and write an improved harness candida
 - Only write files inside your candidate directory ({candidate_dir.relative_to(workspace_root)}/).
 - You can read any file in the workspace.
 - Make targeted improvements based on evidence from traces.
-"""
+
+{PROPOSER_PRINCIPLES}"""
 
 
 class APIProposer(BaseProposer):

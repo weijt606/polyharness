@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 from polyharness.proposer.adapters import CLIAdapter, get_adapter
-from polyharness.proposer.base import BaseProposer
+from polyharness.proposer.base import PROPOSER_PRINCIPLES, BaseProposer
 
 
 def _build_prompt(
@@ -73,7 +73,8 @@ Directory layout:
 - Do NOT modify files outside {cand_rel}/.
 - Do NOT delete or overwrite score.json or metadata.json (the evaluator writes those).
 - Aim for improvements that are testable and measurable.
-"""
+
+{PROPOSER_PRINCIPLES}"""
 
 
 class CLIProposer(BaseProposer):
