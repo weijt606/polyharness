@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-207%20passing-brightgreen.svg)]()
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -45,9 +45,9 @@ Stanford's [Meta-Harness paper](https://arxiv.org/abs/2603.28052) (IRIS Lab, 202
 
 The key insight? When you give an AI agent access to *full diagnostic history* — not just the latest score, but every past attempt's code, traces, and failure modes — it can *systematically evolve* its own harness configuration. The paper called this "non-Markovian search" and showed it outperforms simple best-of-N sampling by a wide margin.
 
-But the paper only released the final optimized artifact (`agent.py`). **The search framework itself was never open-sourced.**
+Stanford has since open-sourced the [Meta-Harness framework](https://github.com/stanford-iris-lab/meta-harness) (MIT) — the reference implementation plus the paper's two experiments (text-classification memory search and Terminal-Bench 2 scaffold evolution).
 
-PolyHarness fills that gap. It's the open-source engine that makes Meta-Harness search available to everyone — for any agent, any task, any evaluation pipeline.
+PolyHarness takes the same core idea in a different direction: rather than a reference framework you adapt per experiment, it's a productized, multi-backend CLI that optimizes the harness around *any* CLI agent on *your* tasks — with online evolution from real usage, not just batch runs on a benchmark.
 
 > **Think of it this way:**
 > - Memory tools (like Supermemory) give agents persistent **memory** across conversations.

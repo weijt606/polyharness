@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.4] - 2026-05-26
+
+### Added
+- **Proposer improvement principles** — every Proposer prompt/instruction
+  (API, CLI, and the injected `CLAUDE.md`/`AGENTS.md` etc.) now carries shared
+  directives distilled from the official Stanford Meta-Harness reference Skill
+  (MIT, re-authored not copied): change a real mechanism rather than tuning
+  constants, stay general / don't overfit the eval set, ground changes in trace
+  evidence, and state a falsifiable hypothesis. Pushes proposers toward
+  higher-value, generalizable candidates (complements the post-hoc novelty filter).
+
+### Changed
+- Backstory in README / README_CN corrected: the Stanford Meta-Harness framework
+  is now open-sourced (MIT); reframed PolyHarness's positioning accordingly and
+  linked the official repo.
+
 ## [0.2.3] - 2026-05-26
 
 ### Fixed

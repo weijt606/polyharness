@@ -177,6 +177,25 @@ def test_build_prompt_includes_leaderboard(tmp_path):
     assert "0.8" in prompt
 
 
+def test_proposer_prompts_include_improvement_principles(tmp_path):
+    """Both the CLI and API proposer prompts carry the shared improvement principles."""
+    from polyharness.proposer.api_proposer import _build_system_prompt
+    from polyharness.proposer.base import PROPOSER_PRINCIPLES
+
+    ws = tmp_path / "ws"
+    cand = ws / "candidates" / "iter_1"
+    cand.mkdir(parents=True)
+
+    cli_prompt = _build_prompt(ws, cand, 1, 0)
+    api_prompt = _build_system_prompt(ws, cand, 1, 0)
+
+    # The anti-parameter-tuning directive is the distinctive marker.
+    assert "parameter variant" in PROPOSER_PRINCIPLES
+    assert "parameter variant" in cli_prompt
+    assert "parameter variant" in api_prompt
+    assert "falsifiable hypothesis" in cli_prompt
+
+
 # ---------------------------------------------------------------------------
 # CLIProposer
 # ---------------------------------------------------------------------------

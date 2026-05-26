@@ -414,4 +414,17 @@ through iterative search. Each time you are invoked, you will:
 - Compare the best candidate's traces with worse ones to spot patterns.
 - If a previous approach regressed, explain why and try a different angle.
 - Small, targeted edits beat large rewrites.
+
+## Improvement Principles
+
+- **Change a real mechanism, not just constants.** If your edit only tweaks
+  thresholds, weights, or wording versus the parent, it is a low-value parameter
+  variant — change the actual logic, strategy, or data structure instead.
+- **Stay general; do not overfit.** Never hardcode answers or task-specific
+  knowledge to inflate the score. The harness must generalize beyond the eval
+  cases you can see.
+- **Ground the change in evidence.** Point to the specific trace failures your
+  change targets, and reason through why it fixes them.
+- **State a falsifiable hypothesis.** Say what you expect to improve and why, so
+  the next iteration can tell whether it held.
 """

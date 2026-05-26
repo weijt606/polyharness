@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-207%20passing-brightgreen.svg)]()
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---
@@ -45,9 +45,9 @@
 
 关键洞察在于：当你给 AI agent 提供的是*完整诊断历史*，而不只是最新分数，它就能*系统性地进化*自己的 harness 配置。这份历史包含每次尝试的代码、轨迹和失败模式。论文把这种方法称为“非马尔可夫搜索”，并证明它明显优于简单的 best-of-N 采样。
 
-但论文只发布了最终优化产物（`agent.py`）。**搜索框架本身从未开源。**
+斯坦福随后已经开源了 [Meta-Harness 框架](https://github.com/stanford-iris-lab/meta-harness)（MIT）——参考实现，加上论文的两个实验（文本分类 memory 搜索、Terminal-Bench 2 scaffold 进化）。
 
-PolyHarness 填补了这个空白。它把 Meta-Harness 搜索变成了一个任何人都能使用的开源引擎，适用于任意 agent、任意任务和任意评估流程。
+PolyHarness 把同一个核心思路带向了不同方向：它不是一个需要逐实验改造的参考框架，而是一个产品化、多后端的 CLI——优化包裹在*任意* CLI agent *外层*的 harness、跑在*你自己*的任务上，并支持从真实使用中在线进化，而不只是在 benchmark 上批量跑。
 
 > **可以这样理解：**
 > - 记忆工具（如 Supermemory）赋予 agent 跨会话的持久**记忆**。

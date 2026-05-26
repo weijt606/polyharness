@@ -5,6 +5,22 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+# Shared improvement directives appended to every Proposer's prompt/instructions.
+# Distilled from the Stanford Meta-Harness reference Skill (MIT) — re-authored,
+# not copied — to push proposers toward high-value, generalizable changes.
+PROPOSER_PRINCIPLES = """\
+## Improvement principles
+- Change a real mechanism, not just constants. If your edit only tweaks thresholds,
+  weights, or wording versus the parent, it is a low-value parameter variant —
+  instead change the actual logic, strategy, or data structure.
+- Stay general; do not overfit. Never hardcode answers or task-specific knowledge to
+  inflate the score. The harness must generalize beyond the eval cases you can see.
+- Ground the change in evidence. Before finalizing, point to the specific failures or
+  regressions in the traces that your change targets, and reason through why it fixes them.
+- State a falsifiable hypothesis. In your summary, say what you expect to improve and
+  why, so the next iteration can tell whether it held.
+"""
+
 
 class BaseProposer(ABC):
     """Abstract Proposer interface.
