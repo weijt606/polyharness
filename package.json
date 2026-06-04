@@ -1,6 +1,6 @@
 {
   "name": "polyharness",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Make your AI agent evolve automatically through iterative harness optimization.",
   "keywords": [
     "agent",

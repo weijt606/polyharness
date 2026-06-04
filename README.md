@@ -30,7 +30,7 @@ Your AI agent runs the same harness every time. Same prompts, same tool config, 
 | | |
 |---|---|
 | **Self-Evolution** | Iteratively searches over harness changes and keeps the full evaluation history in one workspace. |
-| **8 Agent Backends** | Claude Code · Claw Code · Codex · Hermes · OpenCode · API direct · OpenAI-compatible · Local — plug in any CLI agent. |
+| **9 Agent Backends** | Claude Code · Claw Code · Codex · Hermes · OpenCode · Pi · API direct · OpenAI-compatible · Local — plug in any CLI agent. |
 | **Full History** | Every iteration's code, scores, and traces preserved. The Meta-Harness paper reports that non-Markovian search outperforms blind retries. |
 | **Search Tree** | Visualize the optimization path. Compare any two candidates with per-task diffs. |
 | **One-Command Setup** | `ph init --base-harness ... --task-dir ...` — copies files, configures workspace, done. |
@@ -235,7 +235,7 @@ PolyHarness automatically sandboxes your agent inside this workspace, ensuring i
 
 | Scenario | How to configure |
 |----------|------------------|
-| **Supported CLI Tools** | Run `ph init --agent <name>`. PolyHarness auto-injects required instructions (e.g., `CLAUDE.md`).<br>*(Supported: claude-code, claw-code, codex, hermes, opencode)* |
+| **Supported CLI Tools** | Run `ph init --agent <name>`. PolyHarness auto-injects required instructions (e.g., `CLAUDE.md`).<br>*(Supported: claude-code, claw-code, codex, hermes, opencode, pi)* |
 | **Anthropic API** | Run `ph init --agent api`. Set `export ANTHROPIC_API_KEY="sk-ant-..."` before `ph run`. |
 | **OpenAI / Local Models** | Run `ph init --agent openai`. Then configure the endpoint — see [Local Model Setup](#local-model-setup) below. |
 | **Custom CLI path** | If your CLI agent uses a non-standard command, edit `config.yaml` in the workspace before running:<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }`|
@@ -306,6 +306,7 @@ ph wrap --auto-evolve claw -p "Write integration tests for payments"     # Claw 
 ph wrap --auto-evolve codex exec "Add retry logic to the API client"          # Codex
 ph wrap --auto-evolve hermes chat -q "Refactor the DB connection pool"   # Hermes Agent
 ph wrap --auto-evolve opencode run "Fix the flaky parser test"            # OpenCode
+ph wrap --auto-evolve pi -p "Tighten the retry/backoff logic"             # Pi
 
 # Local models — wrap the CLI command directly
 ph wrap --auto-evolve ollama run gemma3 "Summarize this document"         # Ollama
@@ -376,9 +377,10 @@ claw -p "Write payment tests"            # same — auto-wrapped
 codex exec "Add retry logic"                  # same
 hermes chat -q "Refactor pool"           # same
 opencode run "Fix flaky test"             # same
+pi -p "Tighten retry logic"               # same
 ```
 
-How it works: a `preexec` hook in your shell detects `claude`/`claw`/`codex`/`hermes`/`opencode` commands and transparently redirects them through `ph wrap --auto-evolve`. Your output is unchanged.
+How it works: a `preexec` hook in your shell detects `claude`/`claw`/`codex`/`hermes`/`opencode`/`pi` commands and transparently redirects them through `ph wrap --auto-evolve`. Your output is unchanged.
 
 ```bash
 ph shell-hook status           # check if installed
@@ -469,11 +471,12 @@ The Proposer reads **all of this** before generating the next candidate. It can 
 | `codex` | `codex exec` | OpenAI Codex CLI |
 | `hermes` | `hermes chat -q` | Nous Research [Hermes Agent](https://github.com/NousResearch/hermes-agent) CLI |
 | `opencode` | `opencode run` | OpenCode CLI |
+| `pi` | `pi -p` | Minimal open-source [Pi](https://github.com/earendil-works/pi) coding agent (no permission popups) |
 | `local` | — | Offline rule-based engine for development & testing |
 
 `ph doctor` auto-detects all available backends and shows their status.
 
-When you run `ph init --agent claude-code`, PolyHarness automatically generates a `CLAUDE.md` instruction file in the workspace, telling the agent how to behave as an optimization Proposer. Same for `CLAW.md`, `CODEX.md`, `AGENTS.md` (Hermes), `OPENCODE.md` — each agent's native instruction format.
+When you run `ph init --agent claude-code`, PolyHarness automatically generates a `CLAUDE.md` instruction file in the workspace, telling the agent how to behave as an optimization Proposer. Same for `CLAW.md`, `CODEX.md`, `AGENTS.md` (Hermes and Pi), `OPENCODE.md` — each agent's native instruction format.
 
 #### Backend ensemble (adaptive selection)
 
@@ -540,7 +543,7 @@ search:
   seed: null                   # RNG seed — set an int to make randomized runs reproducible
 
 proposer:
-  backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
+  backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | pi | local
   ensemble: []                 # If non-empty, pick among these backends per iteration via a UCB bandit
   bandit_c: 1.41421356         # UCB exploration constant (higher = more exploration)
   model: claude-sonnet-4-6  # Model name (for api/openai backends)
@@ -645,7 +648,7 @@ python -m polyharness --version
 | `ph traces stats` | Summary statistics: total traces, scored count, agent distribution |
 | `ph traces clear` | Remove collected traces (`--keep N` to retain newest, `-y` to skip confirm) |
 | `ph evolve` | Trigger an online evolution cycle using collected traces as context |
-| `ph shell-hook install` | Install shell hook to auto-wrap agent commands (claude, claw, codex, opencode) |
+| `ph shell-hook install` | Install shell hook to auto-wrap agent commands (claude, claw, codex, hermes, opencode, pi) |
 | `ph shell-hook uninstall` | Remove the shell hook from your rc file |
 | `ph shell-hook status` | Check if the shell hook is installed |
 | `ph upgrade` | Upgrade PolyHarness to the latest version |
@@ -661,7 +664,7 @@ python -m polyharness --version
 ### `ph init` options
 
 ```
---agent <name>       Backend: claude-code | claw-code | codex | opencode | api | local
+--agent <name>       Backend: claude-code | claw-code | codex | hermes | opencode | pi | api | local
 --workspace <dir>    Workspace directory (default: current dir)
 --base-harness <dir> Copy starting harness code into workspace
 --task-dir <dir>     Copy tasks/ folder and evaluate.py into workspace
@@ -777,7 +780,8 @@ polyharness/
 │   │       ├── claw_code.py     # claw -p
 │   │       ├── codex.py         # codex exec
 │   │       ├── hermes.py        # hermes chat -q
-│   │       └── opencode.py      # opencode run
+│   │       ├── opencode.py      # opencode run
+│   │       └── pi.py            # pi -p
 │   └── templates/               # 5 built-in task templates
 │       ├── text-classification/
 │       ├── math-word-problems/

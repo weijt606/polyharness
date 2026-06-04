@@ -16,6 +16,7 @@ from polyharness.proposer.adapters import (
     CodexAdapter,
     HermesAdapter,
     OpenCodeAdapter,
+    PiAdapter,
     get_adapter,
 )
 from polyharness.proposer.cli_proposer import CLIProposer, _build_prompt
@@ -25,7 +26,9 @@ from polyharness.proposer.cli_proposer import CLIProposer, _build_prompt
 # ---------------------------------------------------------------------------
 
 def test_registry_has_all_backends():
-    assert set(ADAPTER_REGISTRY) == {"claude-code", "claw-code", "codex", "hermes", "opencode"}
+    assert set(ADAPTER_REGISTRY) == {
+        "claude-code", "claw-code", "codex", "hermes", "opencode", "pi"
+    }
 
 
 def test_get_adapter_valid():
@@ -100,6 +103,23 @@ def test_hermes_command():
     assert "chat" in cmd
     assert "-q" in cmd
     assert "improve harness" in cmd
+
+
+def test_pi_command():
+    adapter = PiAdapter()
+    cmd = adapter.build_command("evolve it")
+    assert cmd[0] == "pi"
+    assert "-p" in cmd          # print mode: single-shot, non-interactive
+    assert "evolve it" in cmd
+    # pi has no permission/sandbox flags by design — none should be added
+    assert "--permission-mode" not in cmd
+    assert "--sandbox" not in cmd
+
+
+def test_pi_custom_path():
+    adapter = PiAdapter()
+    cmd = adapter.build_command("x", cli_path="/opt/bin/pi")
+    assert cmd[0] == "/opt/bin/pi"
 
 
 def test_hermes_custom_path():
@@ -304,7 +324,7 @@ def test_factory_creates_cli_proposers():
     from polyharness.config import ProposerConfig
     from polyharness.proposer import create_proposer
 
-    for backend in ["claude-code", "claw-code", "codex", "opencode"]:
+    for backend in ["claude-code", "claw-code", "codex", "opencode", "pi"]:
         config = ProposerConfig(backend=backend)  # type: ignore[arg-type]
         proposer = create_proposer(config)
         assert isinstance(proposer, CLIProposer)
@@ -312,9 +332,9 @@ def test_factory_creates_cli_proposers():
 
 
 def test_config_accepts_new_backends():
-    """Config model accepts all 6 backend values."""
+    """Config model accepts all CLI + non-CLI backend values."""
     from polyharness.config import ProposerConfig
 
-    for backend in ["api", "claude-code", "claw-code", "codex", "opencode", "local"]:
+    for backend in ["api", "claude-code", "claw-code", "codex", "opencode", "pi", "local"]:
         cfg = ProposerConfig(backend=backend)  # type: ignore[arg-type]
         assert cfg.backend == backend

@@ -36,6 +36,9 @@ htmlcov/
 # GitHub Copilot agent configs (development only)
 .github/agents/
 
+# Claude Code skill files (developer-specific)
+.claude/
+
 # Internal research notes (development only)
 docs/research/claude-code-vs-meta-harness.md
 docs/research/information-bottleneck-hypothesis.md

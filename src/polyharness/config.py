@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 # `backend` field and the optional `ensemble` list (which gets validation for
 # free by reusing this Literal alias).
 BackendName = Literal[
-    "api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "local"
+    "api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "pi", "local"
 ]
 
 

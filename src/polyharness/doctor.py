@@ -51,6 +51,8 @@ def run_doctor() -> None:
         click.echo("Recommended: codex (OpenAI agent)")
     elif "opencode" in available:
         click.echo("Recommended: opencode (open-source agent)")
+    elif "pi" in available:
+        click.echo("Recommended: pi (minimal open-source agent)")
     elif api_key:
         click.echo("Recommended: api (Anthropic API direct)")
     else:

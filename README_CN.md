@@ -30,7 +30,7 @@
 | | |
 |---|---|
 | **自动进化** | 通过迭代搜索探索 harness 变更，并把完整评估历史保存在同一个 workspace 中。 |
-| **8 个 Agent 后端** | Claude Code · Claw Code · Codex · Hermes · OpenCode · API 直连 · OpenAI 兼容 · Local，可接入任何 CLI agent。 |
+| **9 个 Agent 后端** | Claude Code · Claw Code · Codex · Hermes · OpenCode · Pi · API 直连 · OpenAI 兼容 · Local，可接入任何 CLI agent。 |
 | **完整历史** | 每轮迭代的代码、分数、执行轨迹完整保留。Meta-Harness 论文报告非马尔可夫搜索优于盲目重试。 |
 | **搜索树** | 可视化优化路径，对比任意两个候选的逐任务差异。 |
 | **一条命令完成初始化** | `ph init --base-harness ... --task-dir ...`，复制文件、配置 workspace，一步完成。 |
@@ -235,7 +235,7 @@ PolyHarness 会通过沙盒编排将你的 Agent 的工作目录（CWD）限制�
 
 | 使用场景 | 配置方法 |
 |----------|------------------|
-| **受原生支持的 CLI Agent 工具** | 使用 `ph init --agent <name>`。系统会自动注入其专属提示词指令（如 `CLAUDE.md`）。<br>*(支持: claude-code, claw-code, codex, hermes, opencode)* |
+| **受原生支持的 CLI Agent 工具** | 使用 `ph init --agent <name>`。系统会自动注入其专属提示词指令（如 `CLAUDE.md`）。<br>*(支持: claude-code, claw-code, codex, hermes, opencode, pi)* |
 | **Anthropic API 直连** | 使用 `ph init --agent api`。在 `ph run` 前设置 `export ANTHROPIC_API_KEY="sk-ant-..."`。 |
 | **OpenAI / 本地模型** | 使用 `ph init --agent openai`。然后配置 endpoint——参见下方 [本地模型配置](#本地模型配置) 章节。 |
 | **CLI 命令被自定义 / 路径未响应** | 如果你的 CLI Agent 使用了非标命令（或未设置全局 PATH），请在初始化后手动修改 workspace 根目录下的 `config.yaml`：<br>`proposer: { cli_path: "npx @anthropic-ai/claude-code" }` |
@@ -306,6 +306,7 @@ ph wrap --auto-evolve claw -p "给支付服务写集成测试"            # Claw
 ph wrap --auto-evolve codex exec "给 API 客户端加上重试逻辑"              # Codex
 ph wrap --auto-evolve hermes chat -q "重构数据库连接池"              # Hermes Agent
 ph wrap --auto-evolve opencode run "修复不稳定的 parser 测试"       # OpenCode
+ph wrap --auto-evolve pi -p "收紧重试/退避逻辑"                      # Pi
 
 # 本地模型 —— 直接包裹 CLI 命令
 ph wrap --auto-evolve ollama run gemma3 "总结这篇文档"                # Ollama
@@ -376,9 +377,10 @@ claw -p "写支付测试"                  # 同理——自动包裹
 codex exec "加重试逻辑"                     # 同理
 hermes chat -q "重构连接池"            # 同理
 opencode run "修复不稳定测试"            # 同理
+pi -p "收紧重试逻辑"                      # 同理
 ```
 
-原理：shell 的 `preexec` 钩子检测到 `claude`/`claw`/`codex`/`hermes`/`opencode` 命令后，透明地通过 `ph wrap --auto-evolve` 转发。你的输出不会变。
+原理：shell 的 `preexec` 钩子检测到 `claude`/`claw`/`codex`/`hermes`/`opencode`/`pi` 命令后，透明地通过 `ph wrap --auto-evolve` 转发。你的输出不会变。
 
 ```bash
 ph shell-hook status           # 查看是否已安装
@@ -469,11 +471,12 @@ Proposer 在生成下一个候选之前会读取**所有这些信息**。它能�
 | `codex` | `codex exec` | OpenAI Codex CLI |
 | `hermes` | `hermes chat -q` | Nous Research [Hermes Agent](https://github.com/NousResearch/hermes-agent) CLI |
 | `opencode` | `opencode run` | OpenCode CLI |
+| `pi` | `pi -p` | 极简开源 [Pi](https://github.com/earendil-works/pi) 编码 agent（无权限弹窗） |
 | `local` | — | 离线规则引擎，用于开发和测试 |
 
 `ph doctor` 会自动检测所有可用后端并显示状态。
 
-当你运行 `ph init --agent claude-code` 时，PolyHarness 会在 workspace 中自动生成 `CLAUDE.md` 指令文件，告诉 agent 如何作为优化 Proposer 工作。`CLAW.md`、`CODEX.md`、`AGENTS.md`（Hermes）、`OPENCODE.md` 也是同样的机制，每个 agent 都使用它自己的原生指令格式。
+当你运行 `ph init --agent claude-code` 时，PolyHarness 会在 workspace 中自动生成 `CLAUDE.md` 指令文件，告诉 agent 如何作为优化 Proposer 工作。`CLAW.md`、`CODEX.md`、`AGENTS.md`（Hermes 和 Pi）、`OPENCODE.md` 也是同样的机制，每个 agent 都使用它自己的原生指令格式。
 
 #### 后端集成（自适应择优）
 
@@ -540,7 +543,7 @@ search:
   seed: null                   # 随机种子 — 设为整数可让带随机性的搜索可复现
 
 proposer:
-  backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | local
+  backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | pi | local
   ensemble: []                 # 非空时，每轮用 UCB bandit 在这些后端中择优
   bandit_c: 1.41421356         # UCB 探索常数（越大越偏探索）
   model: claude-sonnet-4-6  # 模型名称（api/openai 后端使用）
@@ -645,7 +648,7 @@ python -m polyharness --version
 | `ph traces stats` | 汇总统计：总 traces 数、已评分数、各 agent 分布 |
 | `ph traces clear` | 清除已收集的 traces（`--keep N` 保留最新、`-y` 跳过确认） |
 | `ph evolve` | 基于已收集的 traces 触发一轮在线进化循环 |
-| `ph shell-hook install` | 安装 shell 钩子，自动包裹 agent 命令（claude、claw、codex、opencode） |
+| `ph shell-hook install` | 安装 shell 钩子，自动包裹 agent 命令（claude、claw、codex、hermes、opencode、pi） |
 | `ph shell-hook uninstall` | 从 rc 文件中移除 shell 钩子 |
 | `ph shell-hook status` | 检查 shell 钩子是否已安装 |
 | `ph upgrade` | 升级 PolyHarness 到最新版本 |
@@ -661,7 +664,7 @@ python -m polyharness --version
 ### `ph init` 选项
 
 ```
---agent <name>       后端: claude-code | claw-code | codex | opencode | api | local
+--agent <name>       后端: claude-code | claw-code | codex | hermes | opencode | pi | api | local
 --workspace <dir>    Workspace 目录（默认：当前目录）
 --base-harness <dir> 将起始 harness 代码复制到 workspace
 --task-dir <dir>     将 tasks/ 文件夹和 evaluate.py 复制到 workspace
@@ -777,7 +780,8 @@ polyharness/
 │   │       ├── claw_code.py     # claw -p
 │   │       ├── codex.py         # codex exec
 │   │       ├── hermes.py        # hermes chat -q
-│   │       └── opencode.py      # opencode run
+│   │       ├── opencode.py      # opencode run
+│   │       └── pi.py            # pi -p
 │   └── templates/               # 5 个内置任务模板
 │       ├── text-classification/
 │       ├── math-word-problems/
