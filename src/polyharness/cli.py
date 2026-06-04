@@ -155,7 +155,7 @@ def new(project_dir: str):
 @click.option(
     "--agent",
     type=click.Choice(
-        ["claude-code", "claw-code", "codex", "hermes", "opencode", "api", "openai", "local"],
+        ["claude-code", "claw-code", "codex", "hermes", "opencode", "pi", "api", "openai", "local"],
         case_sensitive=False,
     ),
     default="api",
@@ -239,7 +239,7 @@ def init(
 @click.option(
     "--backend",
     type=click.Choice(
-        ["api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "local"],
+        ["api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "pi", "local"],
         case_sensitive=False,
     ),
     default=None,
@@ -1867,7 +1867,7 @@ _ph_preexec() {
   command -v ph >/dev/null 2>&1 || return
   local cmd="$1"
   case "$cmd" in
-    claude\ *|claw\ *|codex\ *|hermes\ *|opencode\ *)
+    claude\ *|claw\ *|codex\ *|hermes\ *|opencode\ *|pi\ *)
       eval "ph wrap --auto-evolve $cmd"
       # Return non-zero to prevent original command from running (zsh preexec)
       return 1
@@ -1931,8 +1931,8 @@ def install(rc: str | None):
     """Install shell hook to auto-wrap agent commands.
 
     Adds a preexec hook to your shell rc file so that commands like
-    `claude -p ...`, `claw -p ...`, `codex exec ...`, `hermes chat -q ...`, `opencode run ...`
-    are automatically wrapped with `ph wrap --auto-evolve`.
+    `claude -p ...`, `claw -p ...`, `codex exec ...`, `hermes chat -q ...`, `opencode run ...`,
+    `pi -p ...` are automatically wrapped with `ph wrap --auto-evolve`.
     """
     rc_path = Path(rc) if rc else _detect_shell_rc()
 
@@ -1948,7 +1948,7 @@ def install(rc: str | None):
     console.print(f"Run [bold]source {rc_path}[/bold] or open a new terminal to activate.")
     console.print()
     console.print("Agent commands that will be auto-wrapped:")
-    console.print("  claude, claw, codex, hermes, opencode")
+    console.print("  claude, claw, codex, hermes, opencode, pi")
     console.print()
     console.print("To remove: [bold]ph shell-hook uninstall[/bold]")
 
@@ -1993,7 +1993,7 @@ def hook_status(rc: str | None):
 
     if _hook_installed(rc_path):
         console.print(f"[green]Hook is installed in {rc_path}[/green]")
-        console.print("Auto-wrapped commands: claude, claw, codex, hermes, opencode")
+        console.print("Auto-wrapped commands: claude, claw, codex, hermes, opencode, pi")
     else:
         console.print(f"[yellow]Hook is not installed[/yellow] ({rc_path})")
         console.print("Run [bold]ph shell-hook install[/bold] to set it up.")

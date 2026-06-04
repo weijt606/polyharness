@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.5] - 2026-06-04
+
+### Added
+- **Pi agent backend** (`pi`) — adapter for the minimal open-source
+  [Pi coding agent](https://github.com/earendil-works/pi) (earendil-works).
+  Invoked in print mode (`pi -p "<prompt>"`): a single-shot, non-interactive
+  run that edits files in the workspace and exits. By design Pi has no
+  permission popups or sandbox/approval flags, so none are passed. Pi
+  auto-reads `AGENTS.md`, which PolyHarness already injects for this backend.
+  Wired through the adapter registry, `ph init --agent pi`, the `--backend`
+  override, ensemble selection, `ph doctor` detection, and the shell-hook
+  auto-wrap (`pi -p ...`).
+
 ## [0.2.4] - 2026-05-26
 
 ### Added

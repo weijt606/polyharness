@@ -304,6 +304,7 @@ class Workspace:
         "codex": "CODEX.md",
         "hermes": "AGENTS.md",
         "opencode": "OPENCODE.md",
+        "pi": "AGENTS.md",
     }
 
     def _inject_agent_instructions(self, backend: str) -> None:
