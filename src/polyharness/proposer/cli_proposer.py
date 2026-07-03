@@ -7,11 +7,11 @@ that can be wrapped with a CLIAdapter.
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
 
 from polyharness.proposer.adapters import CLIAdapter, get_adapter
 from polyharness.proposer.base import PROPOSER_PRINCIPLES, BaseProposer
+from polyharness.utils.proc import run_process_group
 
 
 def _build_prompt(
@@ -108,24 +108,33 @@ class CLIProposer(BaseProposer):
         env = {**os.environ, **self._adapter.env_vars()}
 
         try:
-            proc = subprocess.run(
+            # run_process_group kills the whole process group on timeout —
+            # agent CLIs fork node/tool grandchildren that a plain
+            # subprocess.run kill would orphan (still writing, still billing).
+            proc = run_process_group(
                 cmd,
-                capture_output=True,
-                text=True,
                 timeout=self.timeout,
                 cwd=str(workspace_root),
                 env=env,
             )
-        except FileNotFoundError:
+        except FileNotFoundError as exc:
             binary = self.cli_path or self._adapter.default_binary
             raise RuntimeError(
                 f"CLI agent '{binary}' not found. "
                 f"Install it or set proposer.cli_path in config.yaml."
-            )
-        except subprocess.TimeoutExpired:
+            ) from exc
+        except PermissionError as exc:
+            binary = self.cli_path or self._adapter.default_binary
             raise RuntimeError(
-                f"CLI agent timed out after {self.timeout}s. "
-                "Increase timeout or simplify the task."
+                f"CLI agent '{binary}' is not executable (permission denied). "
+                f"Check the file mode or set proposer.cli_path in config.yaml."
+            ) from exc
+
+        if proc.timed_out:
+            raise RuntimeError(
+                f"CLI agent timed out after {self.timeout}s (process group killed). "
+                "Increase proposer.timeout or simplify the task.\n"
+                f"partial stdout: {proc.stdout[-500:]}"
             )
 
         result = self._adapter.parse_output(proc.stdout, proc.stderr, proc.returncode)

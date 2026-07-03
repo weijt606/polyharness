@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from polyharness.utils.proc import run_process_group
 
 
 @dataclass
@@ -89,16 +90,21 @@ class PythonEvaluator(BaseEvaluator):
         if task_path:
             cmd.append(task_path)
 
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                cwd=str(self.cwd or candidate_dir),
-            )
-        except subprocess.TimeoutExpired:
-            return {"score": 0.0, "error": "timeout", "stdout": "", "stderr": ""}
+        # Process-group run: evaluate scripts spawn agent CLIs / LLM calls;
+        # on timeout those grandchildren must die too, and partial output is
+        # kept so the timeout can be diagnosed from traces.
+        proc = run_process_group(
+            cmd,
+            timeout=self.timeout,
+            cwd=str(self.cwd or candidate_dir),
+        )
+        if proc.timed_out:
+            return {
+                "score": 0.0,
+                "error": "timeout",
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+            }
 
         result = {
             "stdout": proc.stdout,

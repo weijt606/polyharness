@@ -75,6 +75,9 @@ def test_claw_code_command():
     assert cmd[0] == "claw"
     assert "-p" in cmd
     assert "improve harness" in cmd
+    # --verbose floods the stdout tail that parse_output keeps as the
+    # change summary (same reasoning as claude-code).
+    assert "--verbose" not in cmd
 
 
 def test_codex_command():
@@ -233,14 +236,16 @@ def test_cli_proposer_success(tmp_path):
     ws = _make_workspace(tmp_path)
     cand = ws / "candidates" / "iter_0"
 
-    # Mock subprocess.run to simulate a successful CLI agent
-    mock_proc = type("Proc", (), {
-        "stdout": "Improved the lexicon for better coverage.",
-        "stderr": "",
-        "returncode": 0,
-    })()
+    # Mock the process-group runner to simulate a successful CLI agent
+    from polyharness.utils.proc import ProcResult
 
-    with patch("polyharness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
+    mock_proc = ProcResult(
+        returncode=0,
+        stdout="Improved the lexicon for better coverage.",
+        stderr="",
+    )
+
+    with patch("polyharness.proposer.cli_proposer.run_process_group", return_value=mock_proc):
         proposer = CLIProposer(backend="claude-code")
         result = proposer.propose(ws, cand, 0, None)
 
@@ -255,7 +260,7 @@ def test_cli_proposer_missing_binary(tmp_path):
     cand = ws / "candidates" / "iter_0"
 
     with patch(
-        "polyharness.proposer.cli_proposer.subprocess.run",
+        "polyharness.proposer.cli_proposer.run_process_group",
         side_effect=FileNotFoundError(),
     ):
         proposer = CLIProposer(backend="codex")
@@ -263,16 +268,32 @@ def test_cli_proposer_missing_binary(tmp_path):
             proposer.propose(ws, cand, 0, None)
 
 
-def test_cli_proposer_timeout(tmp_path):
-    """Clear error on timeout."""
+def test_cli_proposer_not_executable(tmp_path):
+    """Clear error when CLI binary exists but lacks execute permission."""
     ws = _make_workspace(tmp_path)
     cand = ws / "candidates" / "iter_0"
 
-    import subprocess as sp
+    with patch(
+        "polyharness.proposer.cli_proposer.run_process_group",
+        side_effect=PermissionError(),
+    ):
+        proposer = CLIProposer(backend="codex")
+        with pytest.raises(RuntimeError, match="not executable"):
+            proposer.propose(ws, cand, 0, None)
+
+
+def test_cli_proposer_timeout(tmp_path):
+    """Clear error on timeout, with partial output preserved."""
+    ws = _make_workspace(tmp_path)
+    cand = ws / "candidates" / "iter_0"
+
+    from polyharness.utils.proc import ProcResult
+
+    mock_proc = ProcResult(returncode=-1, stdout="partial work...", stderr="", timed_out=True)
 
     with patch(
-        "polyharness.proposer.cli_proposer.subprocess.run",
-        side_effect=sp.TimeoutExpired(cmd="codex", timeout=600),
+        "polyharness.proposer.cli_proposer.run_process_group",
+        return_value=mock_proc,
     ):
         proposer = CLIProposer(backend="codex", timeout=600)
         with pytest.raises(RuntimeError, match="timed out"):
@@ -284,13 +305,15 @@ def test_cli_proposer_nonzero_exit_with_output(tmp_path):
     ws = _make_workspace(tmp_path)
     cand = ws / "candidates" / "iter_0"
 
-    mock_proc = type("Proc", (), {
-        "stdout": "Partial changes applied.",
-        "stderr": "warning: something",
-        "returncode": 1,
-    })()
+    from polyharness.utils.proc import ProcResult
 
-    with patch("polyharness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
+    mock_proc = ProcResult(
+        returncode=1,
+        stdout="Partial changes applied.",
+        stderr="warning: something",
+    )
+
+    with patch("polyharness.proposer.cli_proposer.run_process_group", return_value=mock_proc):
         proposer = CLIProposer(backend="claw-code")
         result = proposer.propose(ws, cand, 0, None)
 
@@ -303,13 +326,11 @@ def test_cli_proposer_nonzero_exit_no_output(tmp_path):
     ws = _make_workspace(tmp_path)
     cand = ws / "candidates" / "iter_0"
 
-    mock_proc = type("Proc", (), {
-        "stdout": "",
-        "stderr": "fatal error",
-        "returncode": 1,
-    })()
+    from polyharness.utils.proc import ProcResult
 
-    with patch("polyharness.proposer.cli_proposer.subprocess.run", return_value=mock_proc):
+    mock_proc = ProcResult(returncode=1, stdout="", stderr="fatal error")
+
+    with patch("polyharness.proposer.cli_proposer.run_process_group", return_value=mock_proc):
         proposer = CLIProposer(backend="opencode")
         with pytest.raises(RuntimeError, match="exited with code 1"):
             proposer.propose(ws, cand, 0, None)
@@ -324,7 +345,7 @@ def test_factory_creates_cli_proposers():
     from polyharness.config import ProposerConfig
     from polyharness.proposer import create_proposer
 
-    for backend in ["claude-code", "claw-code", "codex", "opencode", "pi"]:
+    for backend in ["claude-code", "claw-code", "codex", "hermes", "opencode", "pi"]:
         config = ProposerConfig(backend=backend)  # type: ignore[arg-type]
         proposer = create_proposer(config)
         assert isinstance(proposer, CLIProposer)

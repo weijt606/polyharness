@@ -98,6 +98,11 @@ class ProposerConfig(BaseModel):
     cli_path: str | None = Field(
         default=None, description="Path to CLI executable (auto-detect if None)."
     )
+    timeout: int = Field(
+        default=600,
+        ge=1,
+        description="Per-proposal timeout in seconds for CLI agent backends.",
+    )
 
 
 class EvaluatorConfig(BaseModel):

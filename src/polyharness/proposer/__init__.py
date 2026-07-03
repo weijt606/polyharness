@@ -31,6 +31,7 @@ def create_proposer(config) -> BaseProposer:
         return CLIProposer(
             backend=config.backend,
             cli_path=config.cli_path,
+            timeout=getattr(config, "timeout", 600),
         )
     raise ValueError(
         f"Unsupported proposer backend: {config.backend}. "
