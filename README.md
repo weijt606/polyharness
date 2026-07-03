@@ -1,15 +1,6 @@
 # PolyHarness
 
-```text
-  _____      _        _    _                                   
- |  __ \    | |      | |  | |                                  
- | |__) |__ | |_   _ | |__| | __ _ _ __ _ __   ___  ___ ___    
- |  ___/ _ \| | | | ||  __  |/ _` | '__| '_ \ / _ \/ __/ __|   
- | |  | (_) | | |_| || |  | | (_| | |  | | | |  __/\__ \__ \   
- |_|   \___/|_|\__, ||_|  |_|\__,_|_|  |_| |_|\___||___/___/   
-                __/ |                                          
-               |___/                                           
-```
+![PolyHarness: black-and-white manga banner — an AI agent evolves from a tangled, failing robot (score 0.41) into a fully-armored one (best score 0.92), marching along a rising branching search tree whose Pareto-frontier winner glows](./banner.png)
 
 **Make your AI Agent evolve automatically.**
 
