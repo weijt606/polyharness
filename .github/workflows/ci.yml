@@ -52,6 +52,7 @@ jobs:
         run: |
           pip install build
           rm -rf dist/
+          find src -name __pycache__ -type d -exec rm -rf {} + || true
           python -m build
           pip install dist/*.whl
           ph --version

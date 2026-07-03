@@ -54,6 +54,7 @@ jobs:
       - name: Build distributions
         run: |
           rm -rf dist/
+          find src -name __pycache__ -type d -exec rm -rf {} + || true
           python -m build
 
       - name: Check distributions
