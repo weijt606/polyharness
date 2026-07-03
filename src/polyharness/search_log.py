@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+import warnings
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,7 +26,9 @@ class LogEntry:
     @classmethod
     def from_json(cls, line: str) -> LogEntry:
         data = json.loads(line)
-        return cls(**data)
+        # Ignore unknown fields so logs written by newer versions still load.
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 class SearchLog:
@@ -39,11 +42,20 @@ class SearchLog:
 
     def _load(self) -> None:
         self._entries = []
-        with open(self.path) as f:
-            for line in f:
+        with open(self.path, encoding="utf-8") as f:
+            for lineno, line in enumerate(f, start=1):
                 line = line.strip()
-                if line:
+                if not line:
+                    continue
+                try:
                     self._entries.append(LogEntry.from_json(line))
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    # A truncated line (e.g. the process was killed mid-write)
+                    # must not brick resume/best/apply forever — skip it.
+                    warnings.warn(
+                        f"Skipping corrupt search log line {lineno} in {self.path}",
+                        stacklevel=2,
+                    )
 
     def append(
         self,
@@ -62,8 +74,9 @@ class SearchLog:
             task_scores=task_scores or {},
         )
         self._entries.append(entry)
-        with open(self.path, "a") as f:
+        with open(self.path, "a", encoding="utf-8") as f:
             f.write(entry.to_json() + "\n")
+            f.flush()
         return entry
 
     @property

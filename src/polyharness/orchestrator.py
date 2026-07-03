@@ -71,7 +71,11 @@ class Orchestrator:
             )
 
     def run(self, resume: bool = False) -> SearchResult:
-        """Execute the full search loop."""
+        """Execute the full search loop (holding the workspace lock)."""
+        with self.workspace.exclusive_lock():
+            return self._run(resume=resume)
+
+    def _run(self, resume: bool = False) -> SearchResult:
         max_iter = self.config.search.max_iterations
 
         # Reproducibility: seed RNG so tournament/pareto/novelty are repeatable.
@@ -108,15 +112,14 @@ class Orchestrator:
             best_iteration = self.search_log.best_iteration
             start_iter = max(e.iteration for e in entries) + 1
 
-            # Recalculate patience_counter from tail of entries
+            # Recalculate patience_counter from tail of entries: every logged
+            # entry after the record-setting iteration incremented patience at
+            # run time (ties with the best count too — they don't reset it).
             patience_counter = 0
             for e in reversed(entries):
-                if e.iteration == 0:
+                if e.iteration == 0 or e.iteration == best_iteration:
                     break
-                if e.score <= best_score and e.score < best_score:
-                    patience_counter += 1
-                else:
-                    break
+                patience_counter += 1
 
             console.print(
                 f"[yellow]Resuming from iter_{start_iter - 1} "
@@ -128,7 +131,7 @@ class Orchestrator:
             # Step 0: Evaluate base harness
             console.print("[bold]Step 0:[/bold] Evaluating base harness...")
             try:
-                base_result = self._evaluate_iteration(0, is_base=True)
+                base_result = self._evaluate_iteration(0, is_base=True).overall_score
             except FileNotFoundError as e:
                 console.print(f"[red]Error:[/red] {e}")
                 console.print(
@@ -159,6 +162,7 @@ class Orchestrator:
                 best_iteration=best_iteration,
                 best_score=best_score,
                 total_iterations=len(self.search_log) - 1,
+                test_score=self._evaluate_holdout(best_iteration),
             )
             self._print_summary(result)
             return result
@@ -212,9 +216,14 @@ class Orchestrator:
                         continue
 
                     # Step 4: Evaluate
-                    score = self._evaluate_iteration(i)
+                    eval_result = self._evaluate_iteration(i, parent=parent)
+                    score = eval_result.overall_score
                 except Exception as exc:
                     console.print(f"\n[red]iter_{i} failed: {exc}[/red]")
+                    # Remove the half-built candidate dir: it still carries the
+                    # parent's copied files and would otherwise be mistaken for
+                    # a real candidate (and pollute future novelty checks).
+                    shutil.rmtree(self.workspace.candidate_path(i), ignore_errors=True)
                     self._reward_backend(backend, 0.0)  # failure = no value
                     patience_counter += 1
                     progress.update(task, advance=1)
@@ -225,6 +234,8 @@ class Orchestrator:
                 # Record which backend produced this candidate (observability).
                 if backend is not None:
                     metadata = {**metadata, "proposer_backend": backend}
+                if eval_result.gated:
+                    metadata = {**metadata, "cascade_gated": True}
 
                 # Step 5: Store results
                 log_entry = self.search_log.entries[-1]
@@ -256,9 +267,19 @@ class Orchestrator:
 
         # Print iteration summary after progress bar completes
         console.print()
+        prev_best: float | None = None
         for entry in self.search_log.entries:
             if entry.iteration > 0:
-                self._print_iteration(entry.iteration, entry.score, entry.best_so_far, entry.parent)
+                # Delta compares against the best BEFORE this entry — an
+                # entry's own best_so_far already includes itself, which made
+                # delta permanently non-positive.
+                self._print_iteration(
+                    entry.iteration,
+                    entry.score,
+                    prev_best if prev_best is not None else entry.score,
+                    entry.parent,
+                )
+            prev_best = entry.best_so_far
 
         if patience_counter >= self.config.search.early_stop_patience:
             console.print("\n[yellow]Early stopping triggered.[/yellow]")
@@ -274,24 +295,29 @@ class Orchestrator:
         self._print_summary(result)
         return result
 
-    def _evaluate_iteration(self, iteration: int, is_base: bool = False) -> float:
-        """Evaluate a candidate and log results."""
+    def _evaluate_iteration(
+        self, iteration: int, is_base: bool = False, parent: int | None = None
+    ) -> EvalResult:
+        """Evaluate a candidate and log results.
+
+        `parent` is the actual parent chosen by the selection strategy — it is
+        recorded verbatim (logging best_iteration here instead used to corrupt
+        the lineage under tournament/pareto selection).
+        """
         if is_base:
-            cand_dir = self.workspace.base_harness_dir
-            # Also store as iter_0
-            iter_dir = self.workspace.candidate_path(0)
-            if not iter_dir.exists():
-                self.workspace.prepare_candidate(0, parent=None)
+            # Evaluate the iter_0 copy, not base_harness/ itself, so traces
+            # land in candidates/iter_0/traces/ where the Proposer is told to
+            # look — and base_harness/ stays pristine.
+            cand_dir = self.workspace.prepare_candidate(0, parent=None)
         else:
             cand_dir = self.workspace.candidate_path(iteration)
 
         # Base harness is always scored in full; candidates may use cascade.
         eval_result = self._run_eval(cand_dir, allow_cascade=not is_base)
 
-        parent = None if is_base else self.search_log.best_iteration
         self.search_log.append(
             iteration=iteration,
-            parent=parent,
+            parent=None if is_base else parent,
             score=eval_result.overall_score,
             task_scores=eval_result.task_scores,
         )
@@ -305,7 +331,7 @@ class Orchestrator:
                 metadata={"source": "base_harness"},
             )
 
-        return eval_result.overall_score
+        return eval_result
 
     def _search_tasks(self) -> list[str]:
         """Tasks used during the search loop.
@@ -385,7 +411,16 @@ class Orchestrator:
                 f"({r1.overall_score:.2f} < {threshold:.2f}) — "
                 f"skipped {len(stage2)} task(s)[/dim]"
             )
-            return r1
+            # Score over the FULL denominator (unrun stage-2 tasks count as 0)
+            # so a gated partial result can never outrank fully-evaluated
+            # candidates in best/leaderboard comparisons.
+            penalized = (r1.overall_score * len(stage1)) / len(tasks)
+            return EvalResult(
+                overall_score=penalized,
+                task_scores=r1.task_scores,
+                traces=r1.traces,
+                gated=True,
+            )
 
         r2 = self.evaluator.evaluate(candidate_dir=cand_dir, tasks=stage2)
         task_scores = {**r1.task_scores, **r2.task_scores}

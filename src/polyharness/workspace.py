@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+from contextlib import contextmanager
 from pathlib import Path
 
 import click
@@ -204,6 +206,36 @@ class Workspace:
         except (json.JSONDecodeError, ValueError):
             return {}
 
+    @contextmanager
+    def exclusive_lock(self):
+        """Hold an exclusive advisory lock on the workspace for the run.
+
+        Two concurrent `ph run`s in one workspace corrupt each other (interleaved
+        log appends, rmtree of a candidate the other run is evaluating). POSIX
+        only; on other platforms this is a no-op.
+        """
+        if os.name != "posix":
+            yield
+            return
+
+        import fcntl
+
+        lock_path = self.root / ".ph.lock"
+        f = open(lock_path, "w", encoding="utf-8")
+        try:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                raise RuntimeError(
+                    "Another PolyHarness run is already active in this workspace. "
+                    "Wait for it to finish (or remove .ph.lock if it crashed)."
+                ) from None
+            f.write(str(os.getpid()))
+            f.flush()
+            yield
+        finally:
+            f.close()
+
     def is_initialized(self) -> bool:
         """Check if workspace has required structure."""
         return (
@@ -256,7 +288,13 @@ class Workspace:
         return cand_dir
 
     def prepare_candidate(self, iteration: int, parent: int | None = None) -> Path:
-        """Create a candidate dir by copying from parent (or base_harness)."""
+        """Create a candidate dir by copying from parent (or base_harness).
+
+        The parent's evaluation artifacts (score.json, metadata.json, traces)
+        are NOT copied: a not-yet-evaluated candidate carrying its parent's
+        scores misleads the Proposer and, if the iteration later fails, would
+        pollute the leaderboard with duplicate entries.
+        """
         cand_dir = self.candidate_path(iteration)
         if cand_dir.exists():
             shutil.rmtree(cand_dir)
@@ -266,7 +304,13 @@ class Workspace:
         else:
             src = self.base_harness_dir
 
-        shutil.copytree(src, cand_dir, dirs_exist_ok=True)
+        shutil.copytree(
+            src,
+            cand_dir,
+            ignore=shutil.ignore_patterns(
+                "score.json", "metadata.json", "traces", "__pycache__"
+            ),
+        )
         # Ensure traces dir exists
         (cand_dir / "traces").mkdir(exist_ok=True)
         return cand_dir
@@ -277,7 +321,11 @@ class Workspace:
         for cand in sorted(self.candidates_dir.iterdir()):
             score_file = cand / "score.json"
             if score_file.exists():
-                data = json.loads(score_file.read_text())
+                try:
+                    data = json.loads(score_file.read_text())
+                except (json.JSONDecodeError, ValueError, OSError):
+                    # One corrupt score.json must not kill the whole run.
+                    continue
                 entries.append(data)
 
         entries.sort(key=lambda e: e.get("overall_score", 0), reverse=True)

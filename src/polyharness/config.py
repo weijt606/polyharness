@@ -108,9 +108,10 @@ class ProposerConfig(BaseModel):
 class EvaluatorConfig(BaseModel):
     """Evaluator configuration."""
 
-    type: Literal["python", "docker", "custom"] = Field(
-        default="python", description="Evaluator type."
-    )
+    # Only "python" is implemented today. Keeping the Literal narrow means
+    # `ph config set evaluator.type docker` fails at set-time with a clear
+    # message instead of blowing up later inside `ph run`.
+    type: Literal["python"] = Field(default="python", description="Evaluator type.")
     entry: str = Field(default="evaluate.py", description="Evaluator script entrypoint.")
     timeout: int = Field(default=300, ge=1, description="Per-task timeout in seconds.")
     tasks: list[str] = Field(default_factory=list, description="Task file paths.")

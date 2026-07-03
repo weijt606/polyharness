@@ -18,6 +18,25 @@ class EvalResult:
     overall_score: float
     task_scores: dict[str, float] = field(default_factory=dict)
     traces: dict[str, dict] = field(default_factory=dict)
+    gated: bool = False  # cascade stage-1 gate fired; stage-2 tasks not run
+
+
+def _task_keys(tasks: list[str]) -> dict[str, str]:
+    """Map each task path to a unique trace/score key.
+
+    Uses the file stem when unambiguous; falls back to the full relative path
+    (separators flattened) when two tasks share a stem — otherwise
+    `easy/cases.json` and `hard/cases.json` would silently overwrite each
+    other's scores and traces.
+    """
+    stems = [Path(t).stem for t in tasks]
+    keys: dict[str, str] = {}
+    for task, stem in zip(tasks, stems):
+        if stems.count(stem) == 1:
+            keys[task] = stem
+        else:
+            keys[task] = str(Path(task).with_suffix("")).replace("/", "__").replace("\\", "__")
+    return keys
 
 
 class BaseEvaluator(ABC):
@@ -53,11 +72,19 @@ class PythonEvaluator(BaseEvaluator):
 
         if tasks:
             # Run per-task evaluation
+            keys = _task_keys(tasks)
             for task_path in tasks:
-                task_name = Path(task_path).stem
+                task_name = keys[task_path]
                 result = self._run_script(eval_script, candidate_dir, task_path)
                 traces[task_name] = result
-                task_scores[task_name] = result.get("score", 0.0)
+                # Contract fallback: template evaluate scripts emit
+                # `overall_score`; accept it when `score` is absent so
+                # per-task mode doesn't silently record 0.0 for every task.
+                raw = result.get("score", result.get("overall_score", 0.0))
+                try:
+                    task_scores[task_name] = float(raw)
+                except (TypeError, ValueError):
+                    task_scores[task_name] = 0.0
                 self._write_traces(candidate_dir, task_name, result)
 
             overall = sum(task_scores.values()) / len(task_scores) if task_scores else 0.0
@@ -113,11 +140,21 @@ class PythonEvaluator(BaseEvaluator):
         }
 
         # Try to parse JSON from stdout
+        parsed: object = None
         try:
-            output = json.loads(proc.stdout)
-            result.update(output)
+            parsed = json.loads(proc.stdout)
         except (json.JSONDecodeError, ValueError):
-            # If stdout isn't JSON, try to extract a score from the last line
+            parsed = None
+
+        if isinstance(parsed, dict):
+            result.update(parsed)
+        elif isinstance(parsed, (int, float)) and not isinstance(parsed, bool):
+            # A bare JSON number (e.g. a script that prints just `0.65`)
+            # used to crash result.update(); treat it as the score.
+            result["score"] = float(parsed)
+        else:
+            # Not JSON (or an unusable JSON type): extract a score from the
+            # last stdout line.
             lines = proc.stdout.strip().splitlines()
             if lines:
                 try:
