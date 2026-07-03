@@ -11,7 +11,13 @@ from pathlib import Path
 
 @dataclass
 class LogEntry:
-    """A single search log entry."""
+    """A single search log entry.
+
+    `status` makes the log a full event stream: failed and duplicate-skipped
+    iterations are recorded too (previously they vanished, so resume undercounted
+    patience and the bandit lost their signal). Only `evaluated` entries carry a
+    meaningful score.
+    """
 
     iteration: int
     parent: int | None
@@ -19,6 +25,9 @@ class LogEntry:
     best_so_far: float
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     task_scores: dict[str, float] = field(default_factory=dict)
+    status: str = "evaluated"  # evaluated | failed | skipped_duplicate
+    proposer_backend: str | None = None
+    note: str = ""
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)
@@ -63,6 +72,9 @@ class SearchLog:
         parent: int | None,
         score: float,
         task_scores: dict[str, float] | None = None,
+        status: str = "evaluated",
+        proposer_backend: str | None = None,
+        note: str = "",
     ) -> LogEntry:
         """Append a new entry and flush to disk."""
         best = max(score, self.best_score) if self._entries else score
@@ -72,6 +84,9 @@ class SearchLog:
             score=score,
             best_so_far=best,
             task_scores=task_scores or {},
+            status=status,
+            proposer_backend=proposer_backend,
+            note=note,
         )
         self._entries.append(entry)
         with open(self.path, "a", encoding="utf-8") as f:
@@ -84,16 +99,23 @@ class SearchLog:
         return list(self._entries)
 
     @property
+    def evaluated_entries(self) -> list[LogEntry]:
+        """Entries that carry a real score (failed/skipped excluded)."""
+        return [e for e in self._entries if e.status == "evaluated"]
+
+    @property
     def best_score(self) -> float:
-        if not self._entries:
+        scored = self.evaluated_entries
+        if not scored:
             return 0.0
-        return max(e.score for e in self._entries)
+        return max(e.score for e in scored)
 
     @property
     def best_iteration(self) -> int:
-        if not self._entries:
+        scored = self.evaluated_entries
+        if not scored:
             return 0
-        return max(self._entries, key=lambda e: e.score).iteration
+        return max(scored, key=lambda e: e.score).iteration
 
     def pareto_win_counts(self) -> dict[int, int]:
         """Map each Pareto-frontier iteration to the number of tasks it wins.
@@ -103,7 +125,7 @@ class SearchLog:
         are how many tasks each frontier member wins. Returns an empty dict
         when no per-task scores are recorded.
         """
-        entries = [e for e in self._entries if e.task_scores]
+        entries = [e for e in self.evaluated_entries if e.task_scores]
         if not entries:
             return {}
 

@@ -308,7 +308,11 @@ class Workspace:
             src,
             cand_dir,
             ignore=shutil.ignore_patterns(
-                "score.json", "metadata.json", "traces", "__pycache__"
+                "score.json",
+                "metadata.json",
+                "traces",
+                "__pycache__",
+                "PROPOSER_FEEDBACK.md",
             ),
         )
         # Ensure traces dir exists
@@ -389,7 +393,13 @@ class Workspace:
         if not src.exists():
             raise RuntimeError(f"Best candidate directory not found: {src}")
 
-        skip_names = {"score.json", "metadata.json", "traces", "__pycache__"}
+        skip_names = {
+            "score.json",
+            "metadata.json",
+            "traces",
+            "__pycache__",
+            "PROPOSER_FEEDBACK.md",
+        }
         target.mkdir(parents=True, exist_ok=True)
 
         copied = 0

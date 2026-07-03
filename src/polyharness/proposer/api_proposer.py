@@ -8,7 +8,7 @@ from typing import Any
 
 import anthropic
 
-from polyharness.proposer.base import PROPOSER_PRINCIPLES, BaseProposer
+from polyharness.proposer.base import BaseProposer, build_proposer_context
 from polyharness.proposer.toolkit import WorkspaceToolkit, anthropic_tool_definitions
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = anthropic_tool_definitions()
@@ -16,41 +16,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = anthropic_tool_definitions()
 
 def _build_system_prompt(workspace_root: Path, candidate_dir: Path, iteration: int, parent: int | None) -> str:
     """Build the system prompt for the Proposer agent."""
-    return f"""\
-You are PolyHarness Proposer — an expert AI agent that optimizes harness code.
-
-## Your Goal
-Analyze the optimization workspace history and write an improved harness candidate.
-
-## Workspace Layout
-- workspace root: {workspace_root}
-- candidates/iter_0/, iter_1/, ... — previous candidates, each with:
-  - harness code files (the code you can improve)
-  - score.json — evaluation results
-  - traces/ — execution traces (stdout, stderr, metrics)
-- base_harness/ — the starting harness code
-- search_log.jsonl — summary of all iterations and scores
-- config.yaml — search configuration
-
-## Current Task
-- Iteration: {iteration}
-- Parent candidate: {"iter_" + str(parent) if parent is not None else "base_harness (first iteration)"}
-- Your candidate directory: {candidate_dir.relative_to(workspace_root)}
-
-## Instructions
-1. Use file_read / list_dir / file_search to explore the workspace history.
-2. Read previous candidates' score.json and traces to understand what worked and what failed.
-3. Identify specific improvement opportunities.
-4. Use file_write to modify harness code files in your candidate directory.
-5. Focus on concrete, testable improvements. Change ONE thing at a time when possible.
-6. When done, respond with a summary of your changes.
-
-## Rules
-- Only write files inside your candidate directory ({candidate_dir.relative_to(workspace_root)}/).
-- You can read any file in the workspace.
-- Make targeted improvements based on evidence from traces.
-
-{PROPOSER_PRINCIPLES}"""
+    context = build_proposer_context(workspace_root, candidate_dir, iteration, parent)
+    return (
+        "You are PolyHarness Proposer — an expert AI agent that optimizes harness code.\n\n"
+        "Use file_read / list_dir / file_search to explore the workspace history, "
+        "and file_write to modify harness code files in your candidate directory. "
+        "When done, respond with a summary of your changes.\n\n"
+        f"{context}"
+    )
 
 
 class APIProposer(BaseProposer):
@@ -58,10 +31,13 @@ class APIProposer(BaseProposer):
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-6",
+        model: str | None = None,
         max_tokens: int = 16384,
         temperature: float | None = None,
     ):
+        from polyharness.config import DEFAULT_API_MODEL
+
+        model = model or DEFAULT_API_MODEL
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature

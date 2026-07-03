@@ -18,8 +18,10 @@ from polyharness.integrity import (
     IntegrityGuard,
     sha256_file,
 )
+from polyharness.lessons import LessonBook
 from polyharness.proposer import BaseProposer, create_proposer
 from polyharness.proposer.bandit import BackendBandit
+from polyharness.proposer.base import FEEDBACK_FILENAME
 from polyharness.search_log import SearchLog
 from polyharness.workspace import Workspace
 
@@ -82,6 +84,13 @@ class Orchestrator:
         self._base_entry_hash: str | None = None
         self._root_entry_exists: bool = False
 
+        # Loop-engineering state
+        self.lessons = LessonBook(workspace.root)
+        self._pending_feedback: str | None = None  # reflective retry payload
+        self._max_delta: float = 0.0  # normalizer for bandit delta rewards
+        self._text_cache: dict[int, str] = {}  # candidate text per iteration
+        self._rng = random.Random(config.search.seed)  # re-seeded in _run()
+
     def run(self, resume: bool = False) -> SearchResult:
         """Execute the full search loop (holding the workspace lock)."""
         with self.workspace.exclusive_lock():
@@ -136,9 +145,9 @@ class Orchestrator:
     def _run(self, resume: bool = False) -> SearchResult:
         max_iter = self.config.search.max_iterations
 
-        # Reproducibility: seed RNG so tournament/pareto/novelty are repeatable.
-        if self.config.search.seed is not None:
-            random.seed(self.config.search.seed)
+        # Reproducibility: an instance RNG keeps tournament/pareto repeatable
+        # without polluting the process-global random state.
+        self._rng = random.Random(self.config.search.seed)
 
         console.rule("[bold blue]PolyHarness Optimization Loop")
         console.print(f"Max iterations: {max_iter}")
@@ -170,14 +179,18 @@ class Orchestrator:
             best_iteration = self.search_log.best_iteration
             start_iter = max(e.iteration for e in entries) + 1
 
-            # Recalculate patience_counter from tail of entries: every logged
-            # entry after the record-setting iteration incremented patience at
-            # run time (ties with the best count too — they don't reset it).
+            # Recalculate patience_counter from tail of entries: evaluated and
+            # duplicate-skipped entries after the record-setting iteration
+            # incremented patience at run time; failures have their own counter.
             patience_counter = 0
             for e in reversed(entries):
                 if e.iteration == 0 or e.iteration == best_iteration:
                     break
-                patience_counter += 1
+                if e.status != "failed":
+                    patience_counter += 1
+
+            # Restore the bandit's learned backend preferences.
+            self._load_bandit_state()
 
             console.print(
                 f"[yellow]Resuming from iter_{start_iter - 1} "
@@ -238,10 +251,14 @@ class Orchestrator:
         ) as progress:
             task = progress.add_task("Searching", total=remaining, best=best_score)
 
+            consecutive_failures = 0
+            max_failures = self.config.search.max_consecutive_failures
+
             for i in range(start_iter, max_iter + 1):
                 progress.update(task, description=f"iter_{i}")
 
                 backend: str | None = None
+                parent: int | None = None
                 try:
                     # Step 1: Select parent
                     parent = self._select_parent()
@@ -252,7 +269,7 @@ class Orchestrator:
 
                     # Steps 2–3: Propose a candidate, optionally rejecting
                     # near-duplicates (novelty filter).
-                    cand_dir, metadata, accepted = self._propose_with_novelty(
+                    cand_dir, metadata, accepted, dup_of = self._propose_with_novelty(
                         i, parent, proposer
                     )
 
@@ -260,13 +277,30 @@ class Orchestrator:
                     # skip its (potentially expensive) evaluation entirely.
                     if not accepted:
                         console.print(
-                            f"\n[yellow]iter_{i}: skipped — near-duplicate of an "
-                            f"earlier candidate (saved evaluation budget)[/yellow]"
+                            f"\n[yellow]iter_{i}: skipped — near-duplicate of "
+                            f"iter_{dup_of} (saved evaluation budget)[/yellow]"
                         )
-                        # Drop the dangling candidate dir so its copied-from-parent
-                        # score.json doesn't pollute the leaderboard.
+                        # Drop the dangling candidate dir so it isn't mistaken
+                        # for a real candidate.
                         shutil.rmtree(cand_dir, ignore_errors=True)
                         self._reward_backend(backend, 0.0)  # duplicate = no value
+                        self.search_log.append(
+                            iteration=i, parent=parent, score=0.0,
+                            status="skipped_duplicate", proposer_backend=backend,
+                            note=f"near-duplicate of iter_{dup_of}",
+                        )
+                        self.lessons.record(
+                            iteration=i, parent=parent, verdict="duplicate",
+                            backend=backend,
+                            note=f"near-duplicate of iter_{dup_of}; regeneration didn't diverge",
+                        )
+                        # Reflective feedback for the NEXT iteration.
+                        self._pending_feedback = (
+                            f"Iteration iter_{i} was rejected: every attempt was a "
+                            f"near-duplicate of iter_{dup_of}. Take a mechanistically "
+                            "different approach — change the strategy or data flow, "
+                            "not the wording or constants."
+                        )
                         patience_counter += 1
                         progress.update(task, advance=1)
                         if patience_counter >= self.config.search.early_stop_patience:
@@ -274,7 +308,9 @@ class Orchestrator:
                         continue
 
                     # Step 4: Evaluate
-                    eval_result = self._evaluate_iteration(i, parent=parent)
+                    eval_result = self._evaluate_iteration(
+                        i, parent=parent, backend=backend
+                    )
                     score = eval_result.overall_score
                 except IntegrityError:
                     # Tampered scorer/tasks: scores are no longer trustworthy.
@@ -288,11 +324,33 @@ class Orchestrator:
                     # a real candidate (and pollute future novelty checks).
                     shutil.rmtree(self.workspace.candidate_path(i), ignore_errors=True)
                     self._reward_backend(backend, 0.0)  # failure = no value
-                    patience_counter += 1
+                    self.search_log.append(
+                        iteration=i, parent=parent, score=0.0,
+                        status="failed", proposer_backend=backend,
+                        note=str(exc)[:300],
+                    )
+                    self.lessons.record(
+                        iteration=i, parent=parent, verdict="failed",
+                        backend=backend, note=str(exc)[:300],
+                    )
+                    self._pending_feedback = (
+                        f"The previous iteration (iter_{i}) crashed before evaluation: "
+                        f"{str(exc)[:300]}. Make sure your change avoids that failure mode."
+                    )
+                    # Failures are not evidence of "no improvement possible" —
+                    # they get their own, separate stop counter.
+                    consecutive_failures += 1
                     progress.update(task, advance=1)
-                    if patience_counter >= self.config.search.early_stop_patience:
+                    if consecutive_failures >= max_failures:
+                        console.print(
+                            f"\n[red]{consecutive_failures} consecutive failures — "
+                            "stopping (check backend/evaluator health).[/red]"
+                        )
                         break
                     continue
+
+                consecutive_failures = 0
+                self._pending_feedback = None
 
                 # Record which backend produced this candidate (observability).
                 if backend is not None:
@@ -310,9 +368,22 @@ class Orchestrator:
                     metadata=metadata,
                 )
 
-                # Reward the backend when its candidate improved over its parent.
-                self._reward_backend(
-                    backend, 1.0 if score > self._parent_score(parent) else 0.0
+                # Reward the backend by normalized fitness delta: a binary
+                # "improved yes/no" starves the bandit late in the search when
+                # improvements get rare, degenerating UCB into round-robin.
+                parent_score = self._parent_score(parent)
+                self._reward_backend(backend, self._bandit_reward(score, parent_score))
+
+                # Distill this iteration into the evolution memory.
+                verdict = (
+                    "improved" if score > parent_score
+                    else "tied" if score == parent_score
+                    else "regressed"
+                )
+                self.lessons.record(
+                    iteration=i, parent=parent, verdict=verdict,
+                    score=score, parent_score=parent_score, backend=backend,
+                    changes_summary=str(metadata.get("changes_summary", "")),
                 )
 
                 # Step 6: Update best & check early stop
@@ -359,7 +430,11 @@ class Orchestrator:
         return result
 
     def _evaluate_iteration(
-        self, iteration: int, is_base: bool = False, parent: int | None = None
+        self,
+        iteration: int,
+        is_base: bool = False,
+        parent: int | None = None,
+        backend: str | None = None,
     ) -> EvalResult:
         """Evaluate a candidate and log results.
 
@@ -384,6 +459,7 @@ class Orchestrator:
             parent=None if is_base else parent,
             score=eval_result.overall_score,
             task_scores=eval_result.task_scores,
+            proposer_backend=backend,
         )
 
         if is_base:
@@ -521,11 +597,11 @@ class Orchestrator:
         biasing towards stronger candidates — matching the "candidate
         selection strategy" requirement from the product doc.
         """
-        entries = self.search_log.entries
+        entries = self.search_log.evaluated_entries
         if len(entries) <= k:
             contestants = entries
         else:
-            contestants = random.sample(entries, k)
+            contestants = self._rng.sample(entries, k)
         return max(contestants, key=lambda e: e.score).iteration
 
     def _pareto_select(self) -> int:
@@ -546,7 +622,7 @@ class Orchestrator:
 
         iterations = list(win_counts.keys())
         weights = [win_counts[i] for i in iterations]
-        return random.choices(iterations, weights=weights, k=1)[0]
+        return self._rng.choices(iterations, weights=weights, k=1)[0]
 
     def _select_proposer(self) -> tuple[str | None, BaseProposer]:
         """Pick the proposer for this iteration.
@@ -568,10 +644,52 @@ class Orchestrator:
             self._proposer_cache[backend] = create_proposer(sub_config)
         return self._proposer_cache[backend]
 
+    def _bandit_reward(self, score: float, parent_score: float) -> float:
+        """Normalized fitness-delta reward in [0, 1].
+
+        The first improvement of the run scores 1.0; later ones scale against
+        the largest delta seen so far. Self-normalizing (no magic constants),
+        deterministic, and keeps late-search small-but-real gains visible to
+        the bandit instead of collapsing everything to 0.
+        """
+        delta = score - parent_score
+        if delta <= 0:
+            return 0.0
+        self._max_delta = max(self._max_delta, delta)
+        return delta / self._max_delta
+
     def _reward_backend(self, backend: str | None, reward: float) -> None:
         """Feed a reward to the bandit (no-op in single-backend mode)."""
         if self.bandit is not None and backend is not None:
             self.bandit.update(backend, reward)
+            self._save_bandit_state()
+
+    def _bandit_state_path(self):
+        return self.workspace.summary_dir / "bandit.json"
+
+    def _save_bandit_state(self) -> None:
+        if self.bandit is None:
+            return
+        self.workspace.summary_dir.mkdir(exist_ok=True)
+        state = {**self.bandit.to_dict(), "max_delta": self._max_delta}
+        self._bandit_state_path().write_text(
+            json.dumps(state, indent=2, ensure_ascii=False) + "\n"
+        )
+
+    def _load_bandit_state(self) -> None:
+        """Restore bandit arms + reward normalizer on resume (else cold start
+        throws away everything the interrupted run learned)."""
+        if self.bandit is None:
+            return
+        path = self._bandit_state_path()
+        if not path.exists():
+            return
+        try:
+            state = json.loads(path.read_text())
+        except (json.JSONDecodeError, ValueError, OSError):
+            return
+        self.bandit.load_dict(state)
+        self._max_delta = float(state.get("max_delta", 0.0))
 
     def _parent_score(self, parent: int | None) -> float:
         """Score of the parent iteration (0.0 if unknown)."""
@@ -585,79 +703,150 @@ class Orchestrator:
     def _propose_with_novelty(self, iteration: int, parent: int, proposer: BaseProposer):
         """Propose a candidate, optionally rejecting near-duplicates.
 
-        Returns ``(candidate_dir, metadata, accepted)``.  When the novelty
-        filter is enabled and the proposer keeps producing a candidate that is
-        too similar to an earlier one, regenerate up to ``novelty_max_retries``
-        times; if still a near-duplicate, return ``accepted=False`` so the
-        caller can skip evaluation and save budget (ShinkaEvolve-style code
-        novelty rejection — arXiv:2509.19349).
+        Returns ``(candidate_dir, metadata, accepted, duplicate_of)``.  When
+        the novelty filter is enabled and the proposer keeps producing a
+        candidate that is too similar to an earlier one, regenerate up to
+        ``novelty_max_retries`` times — each retry receives written feedback
+        explaining the rejection (reflective retry) instead of blindly
+        re-running the same prompt. If still a near-duplicate, return
+        ``accepted=False`` so the caller can skip evaluation and save budget
+        (ShinkaEvolve-style code novelty rejection — arXiv:2509.19349).
         """
-        cand_dir, metadata = self._propose_candidate(iteration, parent, proposer)
+        feedback = self._pending_feedback
+        cand_dir, metadata = self._propose_candidate(
+            iteration, parent, proposer, feedback=feedback
+        )
 
         if not self.config.search.novelty_filter:
-            return cand_dir, metadata, True
+            return cand_dir, metadata, True, None
 
         threshold = self.config.search.novelty_threshold
         max_retries = self.config.search.novelty_max_retries
 
+        dup_of: int | None = None
         for attempt in range(max_retries + 1):
-            similarity = self._max_similarity(iteration, cand_dir)
+            similarity, dup_of = self._max_similarity(iteration, cand_dir, parent)
             if similarity < threshold:
-                return cand_dir, metadata, True
+                return cand_dir, metadata, True, None
             if attempt < max_retries:
                 console.print(
-                    f"[dim]iter_{iteration}: candidate {similarity:.2f} similar to an "
-                    f"existing one — regenerating ({attempt + 1}/{max_retries})[/dim]"
+                    f"[dim]iter_{iteration}: candidate {similarity:.2f} similar to "
+                    f"iter_{dup_of} — regenerating with feedback "
+                    f"({attempt + 1}/{max_retries})[/dim]"
                 )
-                cand_dir, metadata = self._propose_candidate(iteration, parent, proposer)
+                retry_feedback = (
+                    f"Your previous attempt was rejected: it is {similarity:.0%} "
+                    f"identical to the existing candidate iter_{dup_of}. Re-read "
+                    f"candidates/iter_{dup_of}/ to see what has already been tried, "
+                    "then make a MECHANISTICALLY different change — a different "
+                    "strategy, algorithm, or data flow, not a rewording or a "
+                    "constant tweak."
+                )
+                cand_dir, metadata = self._propose_candidate(
+                    iteration, parent, proposer, feedback=retry_feedback
+                )
 
-        return cand_dir, metadata, False
+        return cand_dir, metadata, False, dup_of
 
-    def _propose_candidate(self, iteration: int, parent: int, proposer: BaseProposer):
+    def _propose_candidate(
+        self,
+        iteration: int,
+        parent: int,
+        proposer: BaseProposer,
+        feedback: str | None = None,
+    ):
         """Prepare a candidate dir, run the proposer, and verify output.
+
+        `feedback` (rejection/failure context from the orchestrator) is written
+        to ``PROPOSER_FEEDBACK.md`` inside the fresh candidate dir; every
+        backend's prompt tells the agent to read that file first. This keeps
+        the reflective-retry channel file-based, so it works identically for
+        CLI agents and API tool loops without changing the propose() ABI.
 
         Returns ``(candidate_dir, metadata)``.  Raises ``FileNotFoundError``
         when the proposer fails to produce ``harness.py``.
         """
         cand_dir = self.workspace.prepare_candidate(iteration, parent)
+        if feedback:
+            (cand_dir / FEEDBACK_FILENAME).write_text(
+                "# Feedback from the orchestrator\n\n" + feedback + "\n",
+                encoding="utf-8",
+            )
         metadata = proposer.propose(
             workspace_root=self.workspace.root,
             candidate_dir=cand_dir,
             iteration=iteration,
             parent=parent,
         )
+        # The feedback was for this attempt only; don't let it leak into the
+        # candidate's on-disk identity (or into children via copytree).
+        (cand_dir / FEEDBACK_FILENAME).unlink(missing_ok=True)
         if not (cand_dir / "harness.py").exists():
             raise FileNotFoundError(
                 f"Proposer did not generate harness.py in iter_{iteration}"
             )
         return cand_dir, metadata
 
-    def _max_similarity(self, iteration: int, cand_dir) -> float:
-        """Max text similarity of *cand_dir* against all earlier candidates.
+    def _max_similarity(
+        self, iteration: int, cand_dir, parent: int | None = None
+    ) -> tuple[float, int | None]:
+        """Max text similarity of *cand_dir* against earlier candidates.
 
-        Uses :class:`difflib.SequenceMatcher` (stdlib, no extra deps) on the
-        concatenated editable harness files. Returns a ratio in ``[0, 1]``.
+        Returns ``(ratio, iteration_of_closest_match)``.
+
+        The parent is exempt from the near-duplicate threshold — small
+        targeted edits are exactly what the instructions ask for, so high
+        similarity to the parent is expected. Only an *identical* copy of the
+        parent (no change at all) counts. Other branches use the full
+        threshold: re-inventing a sibling is wasted budget.
+
+        Cost control: exact-match via string equality first, then
+        ``quick_ratio`` upper bounds to skip hopeless comparisons, with
+        per-iteration text caching (the old version re-read every candidate
+        from disk and ran full SequenceMatcher against all of them, O(N²)
+        in run length).
         """
         from difflib import SequenceMatcher
 
         new_text = self._candidate_text(cand_dir)
         if not new_text:
-            return 0.0
+            return 0.0, None
 
         best = 0.0
-        for entry in self.search_log.entries:
+        best_iter: int | None = None
+        for entry in self.search_log.evaluated_entries:
             if entry.iteration == iteration:
                 continue
-            other_dir = self.workspace.candidate_path(entry.iteration)
-            if not other_dir.exists():
-                continue
-            other_text = self._candidate_text(other_dir)
+            other_text = self._cached_candidate_text(entry.iteration)
             if not other_text:
                 continue
-            ratio = SequenceMatcher(None, new_text, other_text).ratio()
+
+            if entry.iteration == parent:
+                # Parent: only a byte-identical copy counts as a duplicate.
+                if new_text == other_text:
+                    return 1.0, parent
+                continue
+
+            if new_text == other_text:
+                return 1.0, entry.iteration
+
+            matcher = SequenceMatcher(None, new_text, other_text)
+            if matcher.real_quick_ratio() <= best or matcher.quick_ratio() <= best:
+                continue
+            ratio = matcher.ratio()
             if ratio > best:
                 best = ratio
-        return best
+                best_iter = entry.iteration
+        return best, best_iter
+
+    def _cached_candidate_text(self, iteration: int) -> str:
+        """Candidate text with caching (completed candidates don't change)."""
+        if iteration not in self._text_cache:
+            other_dir = self.workspace.candidate_path(iteration)
+            self._text_cache[iteration] = (
+                self._candidate_text(other_dir) if other_dir.exists() else ""
+            )
+        return self._text_cache[iteration]
 
     def _candidate_text(self, cand_dir) -> str:
         """Concatenate a candidate's editable harness files into one blob."""

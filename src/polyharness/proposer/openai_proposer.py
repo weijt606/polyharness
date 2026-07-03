@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from polyharness.proposer.base import PROPOSER_PRINCIPLES, BaseProposer
+from polyharness.proposer.base import BaseProposer, build_proposer_context
 from polyharness.proposer.toolkit import WorkspaceToolkit, openai_tool_definitions
 
 TOOL_DEFINITIONS = openai_tool_definitions()
@@ -13,38 +13,14 @@ TOOL_DEFINITIONS = openai_tool_definitions()
 
 def _build_system_prompt(workspace_root: Path, candidate_dir: Path, iteration: int, parent: int | None) -> str:
     """Build the system prompt for the OpenAI compatible Proposer agent."""
-    return f"""\
-You are PolyHarness Proposer — an expert AI agent that optimizes harness code.
-
-## Your Goal
-Analyze the optimization workspace history and write an improved harness candidate.
-
-## Workspace Layout
-- workspace root: {workspace_root}
-- candidates/iter_0/, iter_1/, ... — previous candidates, each with:
-  - harness code files (the code you can improve)
-  - score.json — evaluation results
-  - traces/ — execution traces (stdout, stderr, metrics)
-- base_harness/ — the starting harness code
-- search_log.jsonl — summary of all iterations and scores
-- config.yaml — search configuration
-
-## Current Task
-- Iteration: {iteration}
-- Parent candidate: {"iter_" + str(parent) if parent is not None else "base_harness (first iteration)"}
-- Your candidate directory: {candidate_dir.relative_to(workspace_root)}
-
-## Instructions
-1. Use file_read / list_dir / file_search to explore the workspace history.
-2. Read previous candidates' score.json and traces to understand what worked and what failed.
-3. Use file_write to modify harness code files in your candidate directory.
-4. Focus on one concrete, testable improvement.
-
-## Rules
-- ONLY write files inside your candidate directory ({candidate_dir.relative_to(workspace_root)}/).
-- Describe changes made in your final response without calling tools.
-
-{PROPOSER_PRINCIPLES}"""
+    context = build_proposer_context(workspace_root, candidate_dir, iteration, parent)
+    return (
+        "You are PolyHarness Proposer — an expert AI agent that optimizes harness code.\n\n"
+        "Use file_read / list_dir / file_search to explore the workspace history, "
+        "and file_write to modify harness code files in your candidate directory. "
+        "Describe changes made in your final response without calling tools.\n\n"
+        f"{context}"
+    )
 
 
 class OpenAIProposer(BaseProposer):
@@ -52,13 +28,15 @@ class OpenAIProposer(BaseProposer):
 
     def __init__(
         self,
-        model: str = "gpt-4o",
+        model: str | None = None,
         base_url: str | None = None,
         api_key: str | None = None,
         max_tokens: int | None = None,
         temperature: float | None = None,
     ):
-        self.model = model
+        from polyharness.config import DEFAULT_OPENAI_MODEL
+
+        self.model = model or DEFAULT_OPENAI_MODEL
         self.base_url = base_url
         self.api_key = api_key or "sk-dummy"
         self.max_tokens = max_tokens

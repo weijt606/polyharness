@@ -56,10 +56,17 @@ class PythonEvaluator(BaseEvaluator):
     2. Print a JSON object to stdout with keys: overall_score, task_scores
     """
 
-    def __init__(self, entry: str = "evaluate.py", timeout: int = 300, cwd: Path | None = None):
+    def __init__(
+        self,
+        entry: str = "evaluate.py",
+        timeout: int = 300,
+        cwd: Path | None = None,
+        parallel_tasks: int = 1,
+    ):
         self.entry = entry
         self.timeout = timeout
         self.cwd = cwd
+        self.parallel_tasks = max(1, parallel_tasks)
 
     def evaluate(self, candidate_dir: Path, tasks: list[str]) -> EvalResult:
         eval_script = self._resolve_script(candidate_dir)
@@ -71,11 +78,13 @@ class PythonEvaluator(BaseEvaluator):
         task_scores: dict[str, float] = {}
 
         if tasks:
-            # Run per-task evaluation
+            # Run per-task evaluation. Tasks are independent subprocesses, so
+            # they can run concurrently (evaluation dominates loop wall-clock);
+            # results are assembled in task order for determinism.
             keys = _task_keys(tasks)
-            for task_path in tasks:
+            results = self._run_tasks(eval_script, candidate_dir, tasks)
+            for task_path, result in zip(tasks, results):
                 task_name = keys[task_path]
-                result = self._run_script(eval_script, candidate_dir, task_path)
                 traces[task_name] = result
                 # Contract fallback: template evaluate scripts emit
                 # `overall_score`; accept it when `score` is absent so
@@ -101,6 +110,22 @@ class PythonEvaluator(BaseEvaluator):
             task_scores=task_scores,
             traces=traces,
         )
+
+    def _run_tasks(
+        self, eval_script: Path, candidate_dir: Path, tasks: list[str]
+    ) -> list[dict]:
+        """Run all task scripts, optionally in parallel, preserving task order."""
+        if self.parallel_tasks == 1 or len(tasks) == 1:
+            return [self._run_script(eval_script, candidate_dir, t) for t in tasks]
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=self.parallel_tasks) as pool:
+            futures = [
+                pool.submit(self._run_script, eval_script, candidate_dir, t)
+                for t in tasks
+            ]
+            return [f.result() for f in futures]
 
     def _resolve_script(self, candidate_dir: Path) -> Path:
         # Look in workspace root (cwd) first, then candidate dir
@@ -192,5 +217,6 @@ def create_evaluator(config, cwd: Path | None = None) -> BaseEvaluator:
             entry=config.entry,
             timeout=config.timeout,
             cwd=cwd,
+            parallel_tasks=getattr(config, "parallel_tasks", 1),
         )
     raise ValueError(f"Unsupported evaluator type: {config.type}")

@@ -15,6 +15,12 @@ BackendName = Literal[
     "api", "openai", "claude-code", "claw-code", "codex", "hermes", "opencode", "pi", "local"
 ]
 
+# Central model-default table — update model generations here (and in the
+# matching tests), not in scattered adapter/proposer constants.
+DEFAULT_API_MODEL = "claude-sonnet-5"  # Anthropic API backend
+DEFAULT_OPENAI_MODEL = "gpt-4o"  # openai backend mostly fronts local endpoints
+DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-8"  # pinned for the claude-code CLI
+
 
 class SearchConfig(BaseModel):
     """Search loop parameters."""
@@ -22,6 +28,15 @@ class SearchConfig(BaseModel):
     max_iterations: int = Field(default=20, ge=1, description="Maximum search iterations.")
     early_stop_patience: int = Field(
         default=5, ge=1, description="Stop after N iterations without improvement."
+    )
+    max_consecutive_failures: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Stop after N proposer/evaluator failures in a row. Failures are "
+            "infrastructure signals, not evidence that improvement is "
+            "impossible, so they no longer consume early-stop patience."
+        ),
     )
     seed: int | None = Field(
         default=None,
@@ -81,10 +96,13 @@ class ProposerConfig(BaseModel):
     bandit_c: float = Field(
         default=1.41421356,
         ge=0.0,
-        description="UCB exploration constant for ensemble selection. Higher = more exploration.",
+        description=(
+            "UCB1 exploration constant (score = mean + c*sqrt(ln n / n_i)); "
+            "default sqrt(2) is canonical UCB1. Higher = more exploration."
+        ),
     )
     model: str = Field(
-        default="claude-sonnet-4-6",
+        default=DEFAULT_API_MODEL,
         description="Model for the Proposer agent (api/openai backends; CLI backends use their own).",
     )
     base_url: str | None = Field(
@@ -115,6 +133,15 @@ class EvaluatorConfig(BaseModel):
     entry: str = Field(default="evaluate.py", description="Evaluator script entrypoint.")
     timeout: int = Field(default=300, ge=1, description="Per-task timeout in seconds.")
     tasks: list[str] = Field(default_factory=list, description="Task file paths.")
+    parallel_tasks: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Max task evaluations to run concurrently (per-task mode). Tasks "
+            "are independent subprocesses; results stay in task order. 1 = "
+            "serial (default)."
+        ),
+    )
     cascade: bool = Field(
         default=False,
         description=(

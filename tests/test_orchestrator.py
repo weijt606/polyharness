@@ -291,10 +291,13 @@ def test_novelty_filter_skips_duplicate(tmp_path):
     )
     orch.run()
 
-    # Only the base (iter_0) is evaluated; every later duplicate is skipped,
-    # so it never gets appended to the search log.
-    logged = [e.iteration for e in orch.search_log.entries]
-    assert logged == [0]
+    # Only the base (iter_0) carries a real score; every later duplicate is
+    # recorded as a skipped event (full event stream), never evaluated.
+    evaluated = [e.iteration for e in orch.search_log.evaluated_entries]
+    assert evaluated == [0]
+    skipped = [e for e in orch.search_log.entries if e.status == "skipped_duplicate"]
+    assert skipped, "skipped duplicates must be logged as events"
+    assert all("iter_0" in e.note for e in skipped)
     # And the skipped candidate dir is cleaned up (no dangling copy).
     assert not ws.candidate_path(1).exists()
 
@@ -339,14 +342,17 @@ def test_max_similarity_detects_identical(tmp_path):
     # An identical candidate scores ~1.0 similarity against iter_0.
     dup = ws.prepare_candidate(1, parent=0)
     (dup / "harness.py").write_text("SCORE_HINT = 0.3\n")
-    assert orch._max_similarity(1, dup) > 0.97
+    similarity, dup_of = orch._max_similarity(1, dup)
+    assert similarity > 0.97
+    assert dup_of == 0
 
     # A clearly different candidate scores low.
     novel = ws.prepare_candidate(2, parent=0)
     (novel / "harness.py").write_text(
         "import math\n\ndef solve(x):\n    return math.sqrt(x) * 42 + len(str(x))\n"
     )
-    assert orch._max_similarity(2, novel) < 0.97
+    similarity, _ = orch._max_similarity(2, novel)
+    assert similarity < 0.97
 
 
 def test_orchestrator_ensemble_bandit(tmp_path):
@@ -384,13 +390,17 @@ def test_orchestrator_ensemble_bandit(tmp_path):
 
     assert orch.bandit is not None
     stats = orch.bandit.stats()
-    # Both arms are tried at least once (cold start), and the improving backend
-    # ("local"=HighProposer) earns a perfect improve-rate while the other earns 0.
+    # Both arms are tried at least once (cold start). Rewards are normalized
+    # fitness deltas: the improving backend earns positive mean reward, the
+    # non-improving one earns exactly 0.
     assert stats["local"]["pulls"] >= 1
     assert stats["api"]["pulls"] >= 1
-    assert stats["local"]["mean_reward"] == 1.0
+    assert stats["local"]["mean_reward"] > 0.0
     assert stats["api"]["mean_reward"] == 0.0
     assert stats["local"]["pulls"] >= stats["api"]["pulls"]
+    # Bandit state is persisted for resume.
+    bandit_state = json.loads((ws.summary_dir / "bandit.json").read_text())
+    assert bandit_state["arms"]["local"]["count"] == stats["local"]["pulls"]
     assert result.best_score >= 0.9
     # The winning candidate records which backend produced it.
     best_meta = json.loads(

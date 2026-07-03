@@ -55,7 +55,10 @@ def test_claude_code_command():
     assert "do stuff" in cmd
     # Pinned to Opus 4.7
     assert "--model" in cmd
-    assert "claude-opus-4-7" in cmd
+    from polyharness.config import DEFAULT_CLAUDE_CODE_MODEL
+
+    assert DEFAULT_CLAUDE_CODE_MODEL in cmd
+    assert DEFAULT_CLAUDE_CODE_MODEL == "claude-opus-4-8"
     # Headless edits must be auto-approved or the agent can't write candidates
     assert "--permission-mode" in cmd
     assert "acceptEdits" in cmd
