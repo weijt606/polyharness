@@ -12,6 +12,12 @@ from rich.table import Table
 
 from polyharness.config import PolyHarnessConfig
 from polyharness.evaluator import BaseEvaluator, EvalResult, create_evaluator
+from polyharness.integrity import (
+    HoldoutVault,
+    IntegrityError,
+    IntegrityGuard,
+    sha256_file,
+)
 from polyharness.proposer import BaseProposer, create_proposer
 from polyharness.proposer.bandit import BackendBandit
 from polyharness.search_log import SearchLog
@@ -70,10 +76,62 @@ class Orchestrator:
                 or create_proposer(config.proposer)
             )
 
+        # Set up by run(); None until then so unit tests can poke internals.
+        self._guard: IntegrityGuard | None = None
+        self._vault: HoldoutVault | None = None
+        self._base_entry_hash: str | None = None
+        self._root_entry_exists: bool = False
+
     def run(self, resume: bool = False) -> SearchResult:
         """Execute the full search loop (holding the workspace lock)."""
         with self.workspace.exclusive_lock():
-            return self._run(resume=resume)
+            cfg = self.config.evaluator
+            # Holdout isolation: keep test task files out of the searchable
+            # tree while the proposer works; restored for the final scoring.
+            if cfg.eval_split and cfg.test_tasks:
+                self._vault = HoldoutVault(self.workspace.root, cfg.test_tasks)
+                self._vault.stash()
+            self._init_integrity_guard()
+            try:
+                return self._run(resume=resume)
+            finally:
+                if self._vault is not None:
+                    self._vault.restore()
+
+    def _init_integrity_guard(self) -> None:
+        """Hash the reward-defining files so mid-run tampering aborts the run."""
+        cfg = self.config.evaluator
+        guarded: list[str] = []
+        root_entry = self.workspace.root / cfg.entry
+        base_entry = self.workspace.base_harness_dir / cfg.entry
+        self._root_entry_exists = root_entry.is_file()
+        if self._root_entry_exists:
+            guarded.append(cfg.entry)
+        if base_entry.is_file():
+            self._base_entry_hash = sha256_file(base_entry)
+            guarded.append(f"base_harness/{cfg.entry}")
+        guarded.extend(self._search_tasks())
+        self._guard = IntegrityGuard(self.workspace.root, guarded)
+
+    def _verify_integrity(self, cand_dir=None) -> None:
+        """Fail fast if the evaluate script or task files were modified."""
+        if self._guard is None:
+            return
+        self._guard.verify_or_raise()
+        # When the evaluate script lives inside candidates (no workspace-root
+        # copy), each candidate's own copy is what actually runs — verify it
+        # against the base harness version.
+        if (
+            cand_dir is not None
+            and not self._root_entry_exists
+            and self._base_entry_hash is not None
+        ):
+            cand_entry = cand_dir / self.config.evaluator.entry
+            if cand_entry.is_file() and sha256_file(cand_entry) != self._base_entry_hash:
+                raise IntegrityError(
+                    f"{cand_entry} differs from the base evaluate script — "
+                    "a candidate must not modify its own scorer. Aborting."
+                )
 
     def _run(self, resume: bool = False) -> SearchResult:
         max_iter = self.config.search.max_iterations
@@ -218,6 +276,11 @@ class Orchestrator:
                     # Step 4: Evaluate
                     eval_result = self._evaluate_iteration(i, parent=parent)
                     score = eval_result.overall_score
+                except IntegrityError:
+                    # Tampered scorer/tasks: scores are no longer trustworthy.
+                    # Abort the whole run instead of logging a fake iteration.
+                    shutil.rmtree(self.workspace.candidate_path(i), ignore_errors=True)
+                    raise
                 except Exception as exc:
                     console.print(f"\n[red]iter_{i} failed: {exc}[/red]")
                     # Remove the half-built candidate dir: it still carries the
@@ -311,6 +374,7 @@ class Orchestrator:
             cand_dir = self.workspace.prepare_candidate(0, parent=None)
         else:
             cand_dir = self.workspace.candidate_path(iteration)
+            self._verify_integrity(cand_dir)
 
         # Base harness is always scored in full; candidates may use cascade.
         eval_result = self._run_eval(cand_dir, allow_cascade=not is_base)
@@ -365,6 +429,13 @@ class Orchestrator:
         cand = self.workspace.candidate_path(best_iteration)
         if not cand.exists():
             return None
+
+        # Bring the test tasks back from the vault and confirm neither they
+        # nor the evaluate script changed during the search.
+        if self._vault is not None:
+            self._vault.restore()
+            self._vault.verify_restored()
+        self._verify_integrity(cand)
 
         console.print(
             f"\n[bold]Held-out test:[/bold] scoring iter_{best_iteration} on "
