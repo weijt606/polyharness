@@ -63,6 +63,21 @@ class TestWrap:
         traces = list(store_dir.iterdir())
         assert not (traces[0] / "stdout.txt").exists()
 
+    def test_wrap_passes_dashed_agent_args(self, runner: CliRunner, store_dir: Path):
+        """Agent flags like `-p`/`--flag` must be forwarded, not parsed by wrap.
+
+        Regression: README examples (`ph wrap claude -p "..."`) used to fail
+        with `No such option: -p`.
+        """
+        result = runner.invoke(
+            main, ["wrap", "--store", str(store_dir), "echo", "-n", "--flag", "hello"]
+        )
+        assert result.exit_code == 0
+        assert "No such option" not in result.output
+        traces = list(store_dir.iterdir())
+        meta = json.loads((traces[0] / "meta.json").read_text())
+        assert meta["command"] == ["echo", "-n", "--flag", "hello"]
+
     def test_wrap_command_not_found(self, runner: CliRunner, store_dir: Path):
         result = runner.invoke(
             main, ["wrap", "--store", str(store_dir), "nonexistent_cmd_xyz"]

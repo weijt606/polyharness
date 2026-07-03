@@ -1480,9 +1480,11 @@ def uninstall(yes: bool):
 # ---------------------------------------------------------------------------
 
 
-@main.command()
+@main.command(
+    context_settings=dict(ignore_unknown_options=True, allow_interspersed_args=False)
+)
 @click.argument("agent_cmd")
-@click.argument("agent_args", nargs=-1)
+@click.argument("agent_args", nargs=-1, type=click.UNPROCESSED)
 @click.option(
     "--workspace",
     type=click.Path(),

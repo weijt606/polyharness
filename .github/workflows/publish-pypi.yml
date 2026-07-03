@@ -10,7 +10,36 @@ permissions:
   contents: read
 
 jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches package versions
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PY_VERSION="$(grep -Eo '__version__ = "[^"]+"' src/polyharness/__init__.py | cut -d'"' -f2)"
+          NPM_VERSION="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG_VERSION python=$PY_VERSION npm=$NPM_VERSION"
+          if [ "$TAG_VERSION" != "$PY_VERSION" ] || [ "$TAG_VERSION" != "$NPM_VERSION" ]; then
+            echo "::error::Version mismatch: tag v$TAG_VERSION vs __init__.py $PY_VERSION vs package.json $NPM_VERSION"
+            exit 1
+          fi
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/ -q
+
   build:
+    needs: [check-version, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,10 +52,24 @@ jobs:
         run: python -m pip install --upgrade pip build twine
 
       - name: Build distributions
-        run: python -m build
+        run: |
+          rm -rf dist/
+          python -m build
 
       - name: Check distributions
         run: twine check dist/*
+
+      - name: Verify wheel contains templates and reports the right version
+        run: |
+          pip install dist/*.whl
+          ph --version
+          python - <<'EOF'
+          import polyharness, pathlib
+          pkg = pathlib.Path(polyharness.__file__).parent
+          templates = list((pkg / "templates").rglob("evaluate.py"))
+          assert templates, "templates missing from wheel"
+          print(f"OK: {len(templates)} templates bundled")
+          EOF
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
