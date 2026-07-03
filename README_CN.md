@@ -1,21 +1,12 @@
 # PolyHarness
 
-```text
-  _____      _        _    _                                   
- |  __ \    | |      | |  | |                                  
- | |__) |__ | |_   _ | |__| | __ _ _ __ _ __   ___  ___ ___    
- |  ___/ _ \| | | | ||  __  |/ _` | '__| '_ \ / _ \/ __/ __|   
- | |  | (_) | | |_| || |  | | (_| | |  | | | |  __/\__ \__ \   
- |_|   \___/|_|\__, ||_|  |_|\__,_|_|  |_| |_|\___||___/___/   
-                __/ |                                          
-               |___/                                           
-```
+![PolyHarness 黑白漫画 banner:AI agent 从缠满乱线、得分 0.41 的破损机器人,沿着不断分叉攀升的搜索树一路进化成全副武装的形态(best score 0.92),Pareto 前沿的胜出路径发光](./banner.png)
 
 **让你的 AI Agent 自动进化。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)]()
+[![CI](https://github.com/weijt606/polyharness/actions/workflows/ci.yml/badge.svg)](https://github.com/weijt606/polyharness/actions/workflows/ci.yml)
 [![English](https://img.shields.io/badge/Docs-English-blue.svg)](README.md)
 
 ---

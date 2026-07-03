@@ -22,10 +22,12 @@ class ClawCodeAdapter(CLIAdapter):
 
     def build_command(self, prompt: str, *, cli_path: str | None = None) -> list[str]:
         binary = cli_path or self.default_binary
+        # No --verbose: parse_output keeps only the tail of stdout, and the
+        # verbose event stream would drown out the final change summary
+        # (same reasoning as the Claude Code adapter).
         return [
             binary,
             "-p",                # print mode (non-interactive)
             prompt,
             "--output-format", "text",
-            "--verbose",
         ]

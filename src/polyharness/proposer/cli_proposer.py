@@ -7,11 +7,11 @@ that can be wrapped with a CLIAdapter.
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
 
 from polyharness.proposer.adapters import CLIAdapter, get_adapter
-from polyharness.proposer.base import PROPOSER_PRINCIPLES, BaseProposer
+from polyharness.proposer.base import BaseProposer, build_proposer_context
+from polyharness.utils.proc import run_process_group
 
 
 def _build_prompt(
@@ -21,60 +21,13 @@ def _build_prompt(
     parent: int | None,
 ) -> str:
     """Build the optimization prompt sent to the CLI agent."""
-    parent_label = f"iter_{parent}" if parent is not None else "base_harness (first iteration)"
-    cand_rel = candidate_dir.relative_to(workspace_root)
-
-    # Gather leaderboard context if available
-    leaderboard_section = ""
-    lb_path = workspace_root / "summary" / "leaderboard.json"
-    if lb_path.exists():
-        lb_text = lb_path.read_text()
-        if len(lb_text) > 5000:
-            lb_text = lb_text[:5000] + "\n... (truncated)"
-        leaderboard_section = f"""
-## Current Leaderboard
-```json
-{lb_text}
-```
-"""
-
-    return f"""\
-You are PolyHarness Proposer — an expert AI agent that optimizes harness code
-through iterative search.
-
-## Workspace
-The current working directory is the optimization workspace root.
-
-Directory layout:
-- base_harness/          — the starting harness code (search origin)
-- candidates/iter_0/ ... — previous candidates, each containing:
-  - harness code files (the code you can improve)
-  - score.json — evaluation results (overall_score + per-task scores)
-  - metadata.json — iteration metadata
-  - traces/ — execution traces
-- search_log.jsonl       — chronological log of all iterations and scores
-- config.yaml            — search configuration
-- summary/               — leaderboard and best candidate info
-{leaderboard_section}
-## Your Task
-- Iteration: {iteration}
-- Parent candidate: {parent_label}
-- Your candidate directory: {cand_rel}/
-
-## Instructions
-1. Read the workspace to understand evaluation history. Start with search_log.jsonl
-   and the parent candidate's score.json and traces/.
-2. Identify concrete improvement opportunities from failure patterns.
-3. Modify ONLY files inside your candidate directory ({cand_rel}/).
-4. Focus on a single targeted improvement per iteration.
-5. After making changes, briefly summarize what you changed and why.
-
-## Rules
-- Do NOT modify files outside {cand_rel}/.
-- Do NOT delete or overwrite score.json or metadata.json (the evaluator writes those).
-- Aim for improvements that are testable and measurable.
-
-{PROPOSER_PRINCIPLES}"""
+    context = build_proposer_context(workspace_root, candidate_dir, iteration, parent)
+    return (
+        "You are PolyHarness Proposer — an expert AI agent that optimizes "
+        "harness code through iterative search.\n\n"
+        "The current working directory is the optimization workspace root.\n\n"
+        f"{context}"
+    )
 
 
 class CLIProposer(BaseProposer):
@@ -108,24 +61,33 @@ class CLIProposer(BaseProposer):
         env = {**os.environ, **self._adapter.env_vars()}
 
         try:
-            proc = subprocess.run(
+            # run_process_group kills the whole process group on timeout —
+            # agent CLIs fork node/tool grandchildren that a plain
+            # subprocess.run kill would orphan (still writing, still billing).
+            proc = run_process_group(
                 cmd,
-                capture_output=True,
-                text=True,
                 timeout=self.timeout,
                 cwd=str(workspace_root),
                 env=env,
             )
-        except FileNotFoundError:
+        except FileNotFoundError as exc:
             binary = self.cli_path or self._adapter.default_binary
             raise RuntimeError(
                 f"CLI agent '{binary}' not found. "
                 f"Install it or set proposer.cli_path in config.yaml."
-            )
-        except subprocess.TimeoutExpired:
+            ) from exc
+        except PermissionError as exc:
+            binary = self.cli_path or self._adapter.default_binary
             raise RuntimeError(
-                f"CLI agent timed out after {self.timeout}s. "
-                "Increase timeout or simplify the task."
+                f"CLI agent '{binary}' is not executable (permission denied). "
+                f"Check the file mode or set proposer.cli_path in config.yaml."
+            ) from exc
+
+        if proc.timed_out:
+            raise RuntimeError(
+                f"CLI agent timed out after {self.timeout}s (process group killed). "
+                "Increase proposer.timeout or simplify the task.\n"
+                f"partial stdout: {proc.stdout[-500:]}"
             )
 
         result = self._adapter.parse_output(proc.stdout, proc.stderr, proc.returncode)

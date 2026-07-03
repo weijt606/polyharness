@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polyharness"
-version = "0.2.5"
+dynamic = ["version"]
 description = "Automated harness optimization for AI agents — make your agent evolve."
 readme = "README.md"
 license = "MIT"
@@ -32,7 +32,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-docker = ["docker>=7.0"]
 dev = [
     "pytest>=8.0",
     "pytest-cov",
@@ -47,11 +46,17 @@ Homepage = "https://github.com/weijt606/polyharness"
 Repository = "https://github.com/weijt606/polyharness"
 Issues = "https://github.com/weijt606/polyharness/issues"
 
+[tool.setuptools.dynamic]
+version = { attr = "polyharness.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 polyharness = ["templates/**/*"]
+
+[tool.setuptools.exclude-package-data]
+polyharness = ["templates/**/__pycache__/*", "templates/**/*.pyc"]
 
 [tool.ruff]
 target-version = "py312"

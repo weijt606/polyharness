@@ -1,0 +1,78 @@
+name: Bug report
+description: Something in PolyHarness doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in the details below so we can
+        reproduce it. **Do not report security vulnerabilities here** — see
+        [SECURITY.md](../blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+      placeholder: "Running `ph run` on ... produced ... but I expected ..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. Include the exact commands you ran.
+      placeholder: |
+        1. ph init --agent ... --template ...
+        2. ph run --max-iterations ...
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Proposer backend
+      description: Which backend were you using?
+      options:
+        - api (Anthropic)
+        - openai (OpenAI-compatible / local)
+        - claude-code
+        - claw-code
+        - codex
+        - hermes
+        - opencode
+        - pi
+        - local (offline heuristic)
+        - not sure / not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`ph doctor` output"
+      description: Paste the output of `ph doctor` (redact anything sensitive).
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: PolyHarness version
+      description: Output of `ph --version`.
+      placeholder: "polyharness, version 0.3.0"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS and Python version
+      placeholder: "macOS 15 / Python 3.12.5  (or: installed via npm on Windows 11)"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or traceback
+      description: Paste any error output. Long logs can go in a collapsed block.
+      render: shell
+    validations:
+      required: false

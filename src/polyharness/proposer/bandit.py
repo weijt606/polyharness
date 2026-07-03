@@ -63,7 +63,10 @@ class BackendBandit:
 
         def ucb(b: str) -> float:
             arm = self._arms[b]
-            return arm.mean + self.c * math.sqrt(2 * math.log(total) / arm.count)
+            # Canonical UCB1: mean + c·sqrt(ln n / nᵢ) with c = √2 by default.
+            # (An extra factor of 2 inside the sqrt used to double-count the
+            # exploration constant, over-exploring on small budgets.)
+            return arm.mean + self.c * math.sqrt(math.log(total) / arm.count)
 
         # max() returns the first item on ties → deterministic by order.
         return max(self.backends, key=ucb)
@@ -72,6 +75,8 @@ class BackendBandit:
         """Record a reward in ``[0, 1]`` for *backend*."""
         if backend not in self._arms:
             raise KeyError(f"Unknown backend for bandit update: {backend}")
+        if not 0.0 <= reward <= 1.0:
+            raise ValueError(f"Bandit reward must be in [0, 1], got {reward!r}")
         arm = self._arms[backend]
         arm.count += 1
         arm.total_reward += reward
@@ -82,3 +87,28 @@ class BackendBandit:
             b: {"pulls": arm.count, "mean_reward": round(arm.mean, 4)}
             for b, arm in self._arms.items()
         }
+
+    # -- persistence (so resume doesn't reset learned preferences) ----------
+
+    def to_dict(self) -> dict:
+        """Full-precision state for persistence across resume."""
+        return {
+            "c": self.c,
+            "arms": {
+                b: {"count": arm.count, "total_reward": arm.total_reward}
+                for b, arm in self._arms.items()
+            },
+        }
+
+    def load_dict(self, state: dict) -> None:
+        """Restore state saved by :meth:`to_dict`.
+
+        Arms present in the state but no longer configured are ignored;
+        newly configured backends keep their cold-start status.
+        """
+        for b, arm_state in (state.get("arms") or {}).items():
+            if b in self._arms:
+                self._arms[b] = _Arm(
+                    count=int(arm_state.get("count", 0)),
+                    total_reward=float(arm_state.get("total_reward", 0.0)),
+                )

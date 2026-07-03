@@ -12,6 +12,14 @@ from rich.table import Table
 from polyharness import __version__
 
 console = Console()
+# Errors always go to stderr and are never silenced by -q — otherwise
+# scripted callers get exit 1 with zero output and stdout gets polluted.
+err_console = Console(stderr=True)
+
+
+def _error(message: str) -> None:
+    """Print an error to stderr (immune to --quiet)."""
+    err_console.print(f"[red]Error:[/red] {message}")
 
 
 @click.group()
@@ -233,7 +241,12 @@ def init(
     default=".ph_workspace",
     help="Workspace directory.",
 )
-@click.option("--max-iterations", type=int, default=None, help="Override max iterations.")
+@click.option(
+    "--max-iterations",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Override max iterations.",
+)
 @click.option("--dry-run", is_flag=True, help="Only evaluate base harness, don't start search.")
 @click.option("--resume", is_flag=True, help="Resume an interrupted search from where it left off.")
 @click.option(
@@ -272,7 +285,7 @@ def run(
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace. Run 'ph init' first.")
+        _error("Not a PolyHarness workspace. Run 'ph init' first.")
         raise SystemExit(1)
 
     config = ws.load_config()
@@ -289,7 +302,7 @@ def run(
             config.proposer.ensemble = names  # type: ignore[assignment]
             config = config.model_validate(config.model_dump())
         except Exception as exc:
-            console.print(f"[red]Error:[/red] Invalid --ensemble value: {exc}")
+            _error(f"Invalid --ensemble value: {exc}")
             raise SystemExit(1)
 
     if strategy is not None:
@@ -317,7 +330,7 @@ def status(workspace: str):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     log = ws.search_log()
@@ -397,7 +410,7 @@ def apply(workspace: str, target: str | None):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     target_path = Path(target) if target else ws.base_harness_dir
@@ -405,7 +418,7 @@ def apply(workspace: str, target: str | None):
     try:
         best_i, copied = ws.apply_best(target_path)
     except RuntimeError as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _error(f"{e}")
         raise SystemExit(1)
 
     log = ws.search_log()
@@ -433,14 +446,21 @@ def compare(left: str, right: str, workspace: str, no_diff: bool):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     def _parse_iter(s: str) -> int:
-        s = s.strip()
-        if s.startswith("iter_"):
-            s = s[5:]
-        return int(s)
+        raw = s.strip()
+        cleaned = raw[5:] if raw.startswith("iter_") else raw
+        if cleaned == "best":
+            return ws.search_log().best_iteration
+        try:
+            return int(cleaned)
+        except ValueError:
+            _error(
+                f"expected an iteration like '3', 'iter_3', or 'best' — got {raw!r}"
+            )
+            raise SystemExit(2) from None
 
     left_i, right_i = _parse_iter(left), _parse_iter(right)
     left_dir = ws.candidate_path(left_i)
@@ -448,7 +468,7 @@ def compare(left: str, right: str, workspace: str, no_diff: bool):
 
     for label, d in [("Left", left_dir), ("Right", right_dir)]:
         if not d.exists():
-            console.print(f"[red]Error:[/red] {label} candidate not found: {d}")
+            _error(f"{label} candidate not found: {d}")
             raise SystemExit(1)
 
     left_score = _load_score(left_dir)
@@ -558,7 +578,7 @@ def best(workspace: str):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     log = ws.search_log()
@@ -617,7 +637,7 @@ def log(workspace: str, flat: bool):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     search_log = ws.search_log()
@@ -787,12 +807,12 @@ def export_cmd(target: str, workspace: str, iteration: int | None, include_meta:
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     log = ws.search_log()
     if not log.entries:
-        console.print("[red]Error:[/red] No candidates yet. Run 'ph run' first.")
+        _error("No candidates yet. Run 'ph run' first.")
         raise SystemExit(1)
 
     if iteration is not None:
@@ -802,7 +822,7 @@ def export_cmd(target: str, workspace: str, iteration: int | None, include_meta:
 
     src_dir = ws.candidate_path(iter_i)
     if not src_dir.exists():
-        console.print(f"[red]Error:[/red] Candidate iter_{iter_i} not found: {src_dir}")
+        _error(f"Candidate iter_{iter_i} not found: {src_dir}")
         raise SystemExit(1)
 
     target_path = Path(target)
@@ -849,7 +869,7 @@ def clean(workspace: str, keep_best: bool, yes: bool):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     candidates_dir = ws.candidates_dir
@@ -916,11 +936,15 @@ def config_show(workspace: str):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     config = ws.load_config()
-    console.print(yaml.dump(config.model_dump(), default_flow_style=False, sort_keys=False).rstrip())
+    data = config.model_dump()
+    # Never echo credentials back to the terminal.
+    if data.get("proposer", {}).get("api_key"):
+        data["proposer"]["api_key"] = "********"
+    console.print(yaml.dump(data, default_flow_style=False, sort_keys=False).rstrip())
 
 
 @config_group.command(name="set")
@@ -949,7 +973,7 @@ def config_set(key: str, value: str, workspace: str):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     config_path = ws.root / ws.CONFIG_FILE
@@ -1028,7 +1052,9 @@ def diff(iteration: int, workspace: str, no_diff: bool):
     default=".ph_workspace",
     help="Workspace directory.",
 )
-@click.option("-n", "--top", type=int, default=None, help="Show only top N candidates.")
+@click.option(
+    "-n", "--top", type=click.IntRange(min=1), default=None, help="Show only top N candidates."
+)
 @click.option("--tasks", is_flag=True, help="Show per-task score breakdown.")
 def leaderboard(workspace: str, top: int | None, tasks: bool):
     """Display a ranked leaderboard of all candidates."""
@@ -1036,7 +1062,7 @@ def leaderboard(workspace: str, top: int | None, tasks: bool):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     log = ws.search_log()
@@ -1133,12 +1159,12 @@ def trace(iteration: int, workspace: str, task: str | None):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     cand_dir = ws.candidate_path(iteration)
     if not cand_dir.exists():
-        console.print(f"[red]Error:[/red] iter_{iteration} not found.")
+        _error(f"iter_{iteration} not found.")
         raise SystemExit(1)
 
     traces_dir = cand_dir / "traces"
@@ -1161,7 +1187,7 @@ def trace(iteration: int, workspace: str, task: str | None):
     if task:
         task_names = {t for t in task_names if t == task}
         if not task_names:
-            console.print(f"[red]Error:[/red] No traces for task '{task}'.")
+            _error(f"No traces for task '{task}'.")
             raise SystemExit(1)
 
     # Show score
@@ -1246,7 +1272,7 @@ def report(workspace: str, output: str | None):
 
     ws = Workspace(workspace)
     if not ws.is_initialized():
-        console.print("[red]Error:[/red] Not a PolyHarness workspace.")
+        _error("Not a PolyHarness workspace.")
         raise SystemExit(1)
 
     log = ws.search_log()
@@ -1480,9 +1506,11 @@ def uninstall(yes: bool):
 # ---------------------------------------------------------------------------
 
 
-@main.command()
+@main.command(
+    context_settings=dict(ignore_unknown_options=True, allow_interspersed_args=False)
+)
 @click.argument("agent_cmd")
-@click.argument("agent_args", nargs=-1)
+@click.argument("agent_args", nargs=-1, type=click.UNPROCESSED)
 @click.option(
     "--workspace",
     type=click.Path(),
@@ -1510,6 +1538,7 @@ def wrap(
     """
     import subprocess
     import sys
+    import threading
     import time as _time
 
     from polyharness.collector import Collector
@@ -1517,22 +1546,46 @@ def wrap(
     collector = Collector(store_dir=store)
     full_cmd = [agent_cmd, *agent_args]
 
-    # Transparent forwarding — run agent normally
+    # Transparent forwarding: stream the agent's output through live (a long
+    # run must not look frozen) while tee-ing a copy for the trace. stdin is
+    # inherited so interactive agents keep working.
     start = _time.monotonic()
     try:
-        proc = subprocess.run(full_cmd, capture_output=True, text=True)
+        proc = subprocess.Popen(
+            full_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
     except FileNotFoundError:
-        console.print(f"[red]Error:[/red] Command not found: {agent_cmd}")
+        _error(f"Command not found: {agent_cmd}")
         console.print("Make sure the agent CLI is installed and on your PATH.")
         raise SystemExit(127)
 
-    duration = _time.monotonic() - start
+    captured: dict[str, list[str]] = {"stdout": [], "stderr": []}
 
-    # Output original results to user (zero-delay perception)
-    if proc.stdout:
-        sys.stdout.write(proc.stdout)
-    if proc.stderr:
-        sys.stderr.write(proc.stderr)
+    def _tee(pipe, sink, key: str) -> None:
+        for line in iter(pipe.readline, ""):
+            sink.write(line)
+            sink.flush()
+            captured[key].append(line)
+        pipe.close()
+
+    threads = [
+        threading.Thread(target=_tee, args=(proc.stdout, sys.stdout, "stdout")),
+        threading.Thread(target=_tee, args=(proc.stderr, sys.stderr, "stderr")),
+    ]
+    for t in threads:
+        t.start()
+    proc.wait()
+    for t in threads:
+        t.join()
+
+    duration = _time.monotonic() - start
+    out_text = "".join(captured["stdout"])
+    err_text = "".join(captured["stderr"])
 
     # Record trace
     trace_id = collector.record(
@@ -1540,8 +1593,8 @@ def wrap(
         command=full_cmd,
         exit_code=proc.returncode,
         duration=duration,
-        stdout=proc.stdout if not no_record_output else None,
-        stderr=proc.stderr if not no_record_output else None,
+        stdout=out_text if not no_record_output else None,
+        stderr=err_text if not no_record_output else None,
         workspace=workspace,
         record_output=not no_record_output,
     )
@@ -1860,29 +1913,26 @@ _HOOK_MARKER_START = "# >>> polyharness shell-hook >>>"
 _HOOK_MARKER_END = "# <<< polyharness shell-hook <<<"
 
 _HOOK_SCRIPT = r'''# >>> polyharness shell-hook >>>
-# Auto-wrap agent commands with ph wrap --auto-evolve
+# Auto-wrap agent CLI calls with `ph wrap --auto-evolve`.
 # Installed by: ph shell-hook install
-_ph_preexec() {
-  # Only intercept if ph is available
-  command -v ph >/dev/null 2>&1 || return
-  local cmd="$1"
-  case "$cmd" in
-    claude\ *|claw\ *|codex\ *|hermes\ *|opencode\ *|pi\ *)
-      eval "ph wrap --auto-evolve $cmd"
-      # Return non-zero to prevent original command from running (zsh preexec)
-      return 1
-      ;;
-  esac
-}
-# Install into zsh preexec (works with or without oh-my-zsh)
-if [[ -n "$ZSH_VERSION" ]]; then
-  autoload -Uz add-zsh-hook 2>/dev/null
-  if typeset -f add-zsh-hook >/dev/null 2>&1; then
-    add-zsh-hook preexec _ph_preexec
+#
+# Uses shell wrapper FUNCTIONS, not a preexec hook: zsh's preexec cannot
+# cancel the original command (a hook-based version ran everything twice).
+# The wrapped binary is resolved by the subprocess, so there's no recursion.
+_ph_wrap_run() {
+  if command -v ph >/dev/null 2>&1; then
+    ph wrap --auto-evolve "$@"
   else
-    preexec_functions+=(_ph_preexec)
+    command "$@"
   fi
-fi
+}
+for _ph_agent in claude claw codex hermes opencode pi; do
+  if command -v "$_ph_agent" >/dev/null 2>&1; then
+    # With args → wrapped; bare invocation → untouched (interactive mode).
+    eval "${_ph_agent}() { if [ \$# -gt 0 ]; then _ph_wrap_run ${_ph_agent} \"\$@\"; else command ${_ph_agent}; fi; }"
+  fi
+done
+unset _ph_agent
 # <<< polyharness shell-hook <<<
 '''
 
@@ -1930,9 +1980,11 @@ def shell_hook():
 def install(rc: str | None):
     """Install shell hook to auto-wrap agent commands.
 
-    Adds a preexec hook to your shell rc file so that commands like
-    `claude -p ...`, `claw -p ...`, `codex exec ...`, `hermes chat -q ...`, `opencode run ...`,
-    `pi -p ...` are automatically wrapped with `ph wrap --auto-evolve`.
+    Adds wrapper functions to your shell rc file (zsh and bash) so that
+    commands with arguments like `claude -p ...`, `claw -p ...`,
+    `codex exec ...`, `hermes chat -q ...`, `opencode run ...`, `pi -p ...`
+    are automatically wrapped with `ph wrap --auto-evolve`. Bare interactive
+    invocations (e.g. plain `claude`) are left untouched.
     """
     rc_path = Path(rc) if rc else _detect_shell_rc()
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from polyharness.utils.proc import run_process_group
 
 
 @dataclass
@@ -17,6 +18,25 @@ class EvalResult:
     overall_score: float
     task_scores: dict[str, float] = field(default_factory=dict)
     traces: dict[str, dict] = field(default_factory=dict)
+    gated: bool = False  # cascade stage-1 gate fired; stage-2 tasks not run
+
+
+def _task_keys(tasks: list[str]) -> dict[str, str]:
+    """Map each task path to a unique trace/score key.
+
+    Uses the file stem when unambiguous; falls back to the full relative path
+    (separators flattened) when two tasks share a stem — otherwise
+    `easy/cases.json` and `hard/cases.json` would silently overwrite each
+    other's scores and traces.
+    """
+    stems = [Path(t).stem for t in tasks]
+    keys: dict[str, str] = {}
+    for task, stem in zip(tasks, stems):
+        if stems.count(stem) == 1:
+            keys[task] = stem
+        else:
+            keys[task] = str(Path(task).with_suffix("")).replace("/", "__").replace("\\", "__")
+    return keys
 
 
 class BaseEvaluator(ABC):
@@ -36,10 +56,17 @@ class PythonEvaluator(BaseEvaluator):
     2. Print a JSON object to stdout with keys: overall_score, task_scores
     """
 
-    def __init__(self, entry: str = "evaluate.py", timeout: int = 300, cwd: Path | None = None):
+    def __init__(
+        self,
+        entry: str = "evaluate.py",
+        timeout: int = 300,
+        cwd: Path | None = None,
+        parallel_tasks: int = 1,
+    ):
         self.entry = entry
         self.timeout = timeout
         self.cwd = cwd
+        self.parallel_tasks = max(1, parallel_tasks)
 
     def evaluate(self, candidate_dir: Path, tasks: list[str]) -> EvalResult:
         eval_script = self._resolve_script(candidate_dir)
@@ -51,12 +78,22 @@ class PythonEvaluator(BaseEvaluator):
         task_scores: dict[str, float] = {}
 
         if tasks:
-            # Run per-task evaluation
-            for task_path in tasks:
-                task_name = Path(task_path).stem
-                result = self._run_script(eval_script, candidate_dir, task_path)
+            # Run per-task evaluation. Tasks are independent subprocesses, so
+            # they can run concurrently (evaluation dominates loop wall-clock);
+            # results are assembled in task order for determinism.
+            keys = _task_keys(tasks)
+            results = self._run_tasks(eval_script, candidate_dir, tasks)
+            for task_path, result in zip(tasks, results):
+                task_name = keys[task_path]
                 traces[task_name] = result
-                task_scores[task_name] = result.get("score", 0.0)
+                # Contract fallback: template evaluate scripts emit
+                # `overall_score`; accept it when `score` is absent so
+                # per-task mode doesn't silently record 0.0 for every task.
+                raw = result.get("score", result.get("overall_score", 0.0))
+                try:
+                    task_scores[task_name] = float(raw)
+                except (TypeError, ValueError):
+                    task_scores[task_name] = 0.0
                 self._write_traces(candidate_dir, task_name, result)
 
             overall = sum(task_scores.values()) / len(task_scores) if task_scores else 0.0
@@ -74,6 +111,22 @@ class PythonEvaluator(BaseEvaluator):
             traces=traces,
         )
 
+    def _run_tasks(
+        self, eval_script: Path, candidate_dir: Path, tasks: list[str]
+    ) -> list[dict]:
+        """Run all task scripts, optionally in parallel, preserving task order."""
+        if self.parallel_tasks == 1 or len(tasks) == 1:
+            return [self._run_script(eval_script, candidate_dir, t) for t in tasks]
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=self.parallel_tasks) as pool:
+            futures = [
+                pool.submit(self._run_script, eval_script, candidate_dir, t)
+                for t in tasks
+            ]
+            return [f.result() for f in futures]
+
     def _resolve_script(self, candidate_dir: Path) -> Path:
         # Look in workspace root (cwd) first, then candidate dir
         if self.cwd:
@@ -89,16 +142,21 @@ class PythonEvaluator(BaseEvaluator):
         if task_path:
             cmd.append(task_path)
 
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                cwd=str(self.cwd or candidate_dir),
-            )
-        except subprocess.TimeoutExpired:
-            return {"score": 0.0, "error": "timeout", "stdout": "", "stderr": ""}
+        # Process-group run: evaluate scripts spawn agent CLIs / LLM calls;
+        # on timeout those grandchildren must die too, and partial output is
+        # kept so the timeout can be diagnosed from traces.
+        proc = run_process_group(
+            cmd,
+            timeout=self.timeout,
+            cwd=str(self.cwd or candidate_dir),
+        )
+        if proc.timed_out:
+            return {
+                "score": 0.0,
+                "error": "timeout",
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+            }
 
         result = {
             "stdout": proc.stdout,
@@ -107,11 +165,21 @@ class PythonEvaluator(BaseEvaluator):
         }
 
         # Try to parse JSON from stdout
+        parsed: object = None
         try:
-            output = json.loads(proc.stdout)
-            result.update(output)
+            parsed = json.loads(proc.stdout)
         except (json.JSONDecodeError, ValueError):
-            # If stdout isn't JSON, try to extract a score from the last line
+            parsed = None
+
+        if isinstance(parsed, dict):
+            result.update(parsed)
+        elif isinstance(parsed, (int, float)) and not isinstance(parsed, bool):
+            # A bare JSON number (e.g. a script that prints just `0.65`)
+            # used to crash result.update(); treat it as the score.
+            result["score"] = float(parsed)
+        else:
+            # Not JSON (or an unusable JSON type): extract a score from the
+            # last stdout line.
             lines = proc.stdout.strip().splitlines()
             if lines:
                 try:
@@ -149,5 +217,6 @@ def create_evaluator(config, cwd: Path | None = None) -> BaseEvaluator:
             entry=config.entry,
             timeout=config.timeout,
             cwd=cwd,
+            parallel_tasks=getattr(config, "parallel_tasks", 1),
         )
     raise ValueError(f"Unsupported evaluator type: {config.type}")
