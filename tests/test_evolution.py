@@ -325,7 +325,7 @@ class TestShellHook:
         assert "installed" in result.output.lower()
         content = rc.read_text()
         assert "polyharness shell-hook" in content
-        assert "_ph_preexec" in content
+        assert "_ph_wrap_run" in content
 
     def test_install_idempotent(self, runner: CliRunner, tmp_path: Path):
         rc = tmp_path / ".zshrc"

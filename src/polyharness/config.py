@@ -6,7 +6,17 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class _ValidatedModel(BaseModel):
+    """Base for all config models: direct assignment re-validates.
+
+    CLI overrides assign into loaded configs (`config.search.max_iterations =
+    n`); without this, those writes bypassed every Field constraint.
+    """
+
+    model_config = ConfigDict(validate_assignment=True)
 
 # Single source of truth for proposer backend names. Used by both the fixed
 # `backend` field and the optional `ensemble` list (which gets validation for
@@ -22,10 +32,14 @@ DEFAULT_OPENAI_MODEL = "gpt-4o"  # openai backend mostly fronts local endpoints
 DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-8"  # pinned for the claude-code CLI
 
 
-class SearchConfig(BaseModel):
+class SearchConfig(_ValidatedModel):
     """Search loop parameters."""
 
-    max_iterations: int = Field(default=20, ge=1, description="Maximum search iterations.")
+    max_iterations: int = Field(
+        default=20,
+        ge=0,
+        description="Maximum search iterations. 0 = evaluate the base harness only (dry run).",
+    )
     early_stop_patience: int = Field(
         default=5, ge=1, description="Stop after N iterations without improvement."
     )
@@ -79,7 +93,7 @@ class SearchConfig(BaseModel):
     )
 
 
-class ProposerConfig(BaseModel):
+class ProposerConfig(_ValidatedModel):
     """Proposer agent configuration."""
 
     backend: BackendName = Field(
@@ -112,7 +126,16 @@ class ProposerConfig(BaseModel):
         default=None, description="Optional API key (if None, reads from environment variables)."
     )
     max_tokens: int = Field(default=16384, ge=1, description="Max output tokens per turn.")
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature.")
+    temperature: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "Sampling temperature. Leave unset for current-generation Claude "
+            "models (Sonnet 5 / Opus 4.8+ reject explicit sampling params); "
+            "only set for older models or OpenAI-compatible endpoints."
+        ),
+    )
     cli_path: str | None = Field(
         default=None, description="Path to CLI executable (auto-detect if None)."
     )
@@ -123,7 +146,7 @@ class ProposerConfig(BaseModel):
     )
 
 
-class EvaluatorConfig(BaseModel):
+class EvaluatorConfig(_ValidatedModel):
     """Evaluator configuration."""
 
     # Only "python" is implemented today. Keeping the Literal narrow means
@@ -190,7 +213,7 @@ class EvaluatorConfig(BaseModel):
     )
 
 
-class HarnessConfig(BaseModel):
+class HarnessConfig(_ValidatedModel):
     """Target harness configuration."""
 
     language: str = Field(default="python", description="Harness code language.")
@@ -201,7 +224,7 @@ class HarnessConfig(BaseModel):
     )
 
 
-class EvolutionTriggerConfig(BaseModel):
+class EvolutionTriggerConfig(_ValidatedModel):
     """Trigger strategy configuration for online evolution."""
 
     strategy: Literal["degradation", "accumulate", "cron", "manual"] = Field(
@@ -224,7 +247,7 @@ class EvolutionTriggerConfig(BaseModel):
     )
 
 
-class EvolutionNotifyConfig(BaseModel):
+class EvolutionNotifyConfig(_ValidatedModel):
     """Notification configuration after evolution completes."""
 
     method: Literal["terminal", "webhook"] = Field(
@@ -235,7 +258,7 @@ class EvolutionNotifyConfig(BaseModel):
     )
 
 
-class EvolutionConfig(BaseModel):
+class EvolutionConfig(_ValidatedModel):
     """Online evolution configuration (v0.2.0)."""
 
     mode: Literal["batch", "online"] = Field(
@@ -254,7 +277,7 @@ class EvolutionConfig(BaseModel):
     notify: EvolutionNotifyConfig = Field(default_factory=EvolutionNotifyConfig)
 
 
-class PolyHarnessConfig(BaseModel):
+class PolyHarnessConfig(_ValidatedModel):
     """Top-level configuration for a PolyHarness workspace."""
 
     search: SearchConfig = Field(default_factory=SearchConfig)

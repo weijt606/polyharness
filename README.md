@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)]()
+[![CI](https://github.com/weijt606/polyharness/actions/workflows/ci.yml/badge.svg)](https://github.com/weijt606/polyharness/actions/workflows/ci.yml)
 [![中文文档](https://img.shields.io/badge/文档-中文版-red.svg)](README_CN.md)
 
 ---
@@ -125,7 +125,9 @@ class MyAgentAdapter(CLIAdapter):
 ```bash
 pip install polyharness         # Python >= 3.12
 # or
-npm install -g polyharness      # Node.js wrapper, auto-installs Python package
+npm install -g polyharness      # Node.js wrapper; tries to install the Python package
+                                # (on PEP 668 "externally managed" Pythons, run
+                                #  pip install polyharness in a venv yourself)
 ```
 
 ### 2. Check your environment
@@ -380,11 +382,11 @@ opencode run "Fix flaky test"             # same
 pi -p "Tighten retry logic"               # same
 ```
 
-How it works: a `preexec` hook in your shell detects `claude`/`claw`/`codex`/`hermes`/`opencode`/`pi` commands and transparently redirects them through `ph wrap --auto-evolve`. Your output is unchanged.
+How it works: shell wrapper functions (zsh and bash) route `claude`/`claw`/`codex`/`hermes`/`opencode`/`pi` invocations *with arguments* through `ph wrap --auto-evolve`; output streams through live and the exit code is preserved. Bare interactive invocations (plain `claude`) are left untouched.
 
 ```bash
 ph shell-hook status           # check if installed
-ph shell-hook uninstall        # remove cleanly (restores original rc file)
+ph shell-hook uninstall        # remove cleanly (deletes the hook block from your rc file)
 ```
 
 #### Auto-Evolution flow
@@ -600,7 +602,7 @@ ph --version
 ### npm / npx
 
 ```bash
-npm install -g polyharness   # postinstall auto-installs Python package
+npm install -g polyharness   # postinstall tries to install the Python package
 npx polyharness doctor       # or run without global install
 ```
 

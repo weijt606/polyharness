@@ -36,7 +36,10 @@ def _exec_generated(code_body: str, args):
     wrapped = "def _generated(args):\n"
     for line in code_body.splitlines():
         wrapped += f"    {line}\n"
-    exec(wrapped, namespace)  # noqa: S102 — sandboxed eval of generated code
+    # noqa: S102 — NOT sandboxed: generated code runs with this process's
+    # full permissions. Acceptable for a local eval of your own harness's
+    # output; do not point this template at untrusted code.
+    exec(wrapped, namespace)  # noqa: S102
     return namespace["_generated"](args)
 
 
