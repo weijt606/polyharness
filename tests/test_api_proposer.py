@@ -393,10 +393,9 @@ def test_summary_ignores_declined_partial_text(monkeypatch, ws):
 
 
 def _status_error(status, body):
-    import httpx as _hx  # error construction only needs a response object
-
-    req = _hx.Request("POST", "https://api.anthropic.com/v1/messages")
-    return ap.anthropic.APIStatusError("boom", response=_hx.Response(status, request=req), body=body)
+    # httpx2 on anthropic>=1.0, httpx before (see the _httpx alias above).
+    req = _httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    return ap.anthropic.APIStatusError("boom", response=_httpx.Response(status, request=req), body=body)
 
 
 def test_mid_stream_overloaded_error_is_retried():
