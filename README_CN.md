@@ -505,7 +505,7 @@ proposer:
   base_url: http://localhost:11434/v1      # Ollama 默认端口
   api_key: sk-dummy                        # 本地模型不需要真实 key
   max_tokens: 16384
-  temperature: 0.7
+  temperature: 0.7                         # 仅 openai 后端生效
 ```
 
 常见本地服务端点：
@@ -532,22 +532,28 @@ search:
   novelty_threshold: 0.97      # 超过此相似度判定为近重复
   novelty_max_retries: 1       # 跳过前重新生成近重复候选的次数
   seed: null                   # 随机种子 — 设为整数可让带随机性的搜索可复现
+  max_consecutive_failures: 5  # 连续 N 次 proposer/评估失败后停止
 
 proposer:
   backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | pi | local
   ensemble: []                 # 非空时，每轮用 UCB bandit 在这些后端中择优
   bandit_c: 1.41421356         # UCB 探索常数（越大越偏探索）
-  model: claude-sonnet-4-6  # 模型名称（api/openai 后端使用）
+  model: null                  # api/openai 模型（null = 后端默认：claude-opus-5-5 / gpt-4o）
   base_url: null               # 自定义 API 端点（openai 后端使用）
   api_key: null                # API 密钥覆盖（null = 使用环境变量）
-  max_tokens: 16384            # 每轮 proposer 最大输出 token 数
-  temperature: 0.7             # 采样温度（0.0 – 2.0）
+  max_tokens: null             # 每轮输出上限（null = api 默认 64000，流式；openai 由服务端决定）
+  temperature: null            # 仅 openai 后端 — Anthropic API 拒绝采样参数
+  effort: high                 # api 后端推理强度：low | medium | high | xhigh | max（不支持的旧模型自动不发送）
+  refusal_fallback: true       # api 后端：模型拒答时由 API 在备用模型上重试
+  cli_models: {}               # 按后端覆盖 --model，如 {claude-code: claude-sonnet-5-5}
   cli_path: null               # 自定义 CLI 可执行文件路径（null = 自动检测）
+  timeout: 600                 # CLI 后端单次提议超时（秒）
 
 evaluator:
-  type: python                 # python | docker | custom
+  type: python                 # python（目前唯一的评估器类型）
   entry: evaluate.py           # 评估脚本入口
   timeout: 300                 # 每个任务的超时时间（秒）
+  parallel_tasks: 1            # 逐任务评估的最大并发数（1 = 串行）
   cascade: false               # 先评便宜的任务子集，未过门槛则跳过其余（逐任务模式）
   cascade_threshold: 0.4       # 进入完整任务集所需的第一阶段最低均分
   cascade_stage1: 0            # 第一阶段任务数（0 = 自动，约占 1/3）

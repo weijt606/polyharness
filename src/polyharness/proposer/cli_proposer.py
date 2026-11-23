@@ -42,11 +42,18 @@ class CLIProposer(BaseProposer):
         cli_path: str | None = None,
         timeout: int = 600,
         adapter: CLIAdapter | None = None,
+        model: str | None = None,
     ):
         self.backend = backend
         self.cli_path = cli_path
         self.timeout = timeout
         self._adapter = adapter or get_adapter(backend)
+        if model and not self._adapter.supports_model:
+            raise ValueError(
+                f"CLI backend '{backend}' does not accept a model override; "
+                "remove it from proposer.cli_models."
+            )
+        self.model = model
 
     def propose(
         self,
@@ -56,7 +63,10 @@ class CLIProposer(BaseProposer):
         parent: int | None,
     ) -> dict:
         prompt = _build_prompt(workspace_root, candidate_dir, iteration, parent)
-        cmd = self._adapter.build_command(prompt, cli_path=self.cli_path)
+        if self.model:
+            cmd = self._adapter.build_command(prompt, cli_path=self.cli_path, model=self.model)
+        else:
+            cmd = self._adapter.build_command(prompt, cli_path=self.cli_path)
 
         env = {**os.environ, **self._adapter.env_vars()}
 
@@ -100,7 +110,9 @@ class CLIProposer(BaseProposer):
 
         return {
             "changes_summary": result.changes_summary or "(no output from agent)",
-            "proposer_model": f"cli:{self._adapter.name}",
+            "proposer_model": (
+                f"cli:{self._adapter.name}:{self.model}" if self.model else f"cli:{self._adapter.name}"
+            ),
             "cli_returncode": result.returncode,
             **result.extra,
         }

@@ -507,7 +507,7 @@ proposer:
   base_url: http://localhost:11434/v1      # Ollama default
   api_key: sk-dummy                        # local models don't need a real key
   max_tokens: 16384
-  temperature: 0.7
+  temperature: 0.7                         # openai backend only
 ```
 
 Common local endpoints:
@@ -534,22 +534,28 @@ search:
   novelty_threshold: 0.97      # Similarity ratio above which a candidate is a near-duplicate
   novelty_max_retries: 1       # Regenerate a near-duplicate this many times before skipping
   seed: null                   # RNG seed — set an int to make randomized runs reproducible
+  max_consecutive_failures: 5  # Stop after N proposer/evaluator failures in a row
 
 proposer:
   backend: api                 # api | openai | claude-code | claw-code | codex | hermes | opencode | pi | local
   ensemble: []                 # If non-empty, pick among these backends per iteration via a UCB bandit
   bandit_c: 1.41421356         # UCB exploration constant (higher = more exploration)
-  model: claude-sonnet-4-6  # Model name (for api/openai backends)
+  model: null                  # api/openai model (null = backend default: claude-opus-5-5 / gpt-4o)
   base_url: null               # Custom API endpoint (for openai backend)
   api_key: null                # API key override (null = use env var)
-  max_tokens: 16384            # Max output tokens per proposer turn
-  temperature: 0.7             # Sampling temperature (0.0 – 2.0)
+  max_tokens: null             # Per-turn output cap (null = api: 64000 streamed; openai: server default)
+  temperature: null            # openai backend only — the Anthropic API rejects sampling params
+  effort: high                 # api backend: low | medium | high | xhigh | max (auto-skipped on models without effort)
+  refusal_fallback: true       # api backend: on a refusal, let the API retry on a fallback model
+  cli_models: {}               # Per-backend --model override, e.g. {claude-code: claude-sonnet-5-5}
   cli_path: null               # Custom CLI executable path (auto-detect if null)
+  timeout: 600                 # Per-proposal timeout (seconds) for CLI agent backends
 
 evaluator:
-  type: python                 # python | docker | custom
+  type: python                 # python (only evaluator type today)
   entry: evaluate.py           # Evaluator script entrypoint
   timeout: 300                 # Per-task timeout in seconds
+  parallel_tasks: 1            # Max concurrent per-task evaluations (1 = serial)
   cascade: false               # Stage cheap subset first; skip rest if it fails the gate (per-task mode)
   cascade_threshold: 0.4       # Min stage-1 mean score required to run the full task set
   cascade_stage1: 0            # Tasks in stage 1 (0 = auto, ~1/3 of the list)

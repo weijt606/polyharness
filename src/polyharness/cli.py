@@ -965,7 +965,7 @@ def config_set(key: str, value: str, workspace: str):
 
       ph config set proposer.backend claude-code
 
-      ph config set proposer.temperature 0.5
+      ph config set proposer.effort xhigh
     """
     import yaml
 
@@ -994,6 +994,8 @@ def config_set(key: str, value: str, workspace: str):
 
     if value.lower() in ("true", "false"):
         converted = value.lower() == "true"
+    elif value in ("null", "~"):
+        converted = None  # YAML null, e.g. `ph config set proposer.effort null`
     else:
         try:
             converted = int(value)
@@ -1311,7 +1313,7 @@ def report(workspace: str, output: str | None):
     lines.append("| Parameter | Value |")
     lines.append("|-----------|-------|")
     lines.append(f"| Backend | {config.proposer.backend} |")
-    lines.append(f"| Model | {config.proposer.model} |")
+    lines.append(f"| Model | {config.proposer.model or '(backend default)'} |")
     lines.append(f"| Max iterations | {config.search.max_iterations} |")
     lines.append(f"| Early stop patience | {config.search.early_stop_patience} |")
     lines.append(f"| Parent selection | {config.search.parent_selection} |")

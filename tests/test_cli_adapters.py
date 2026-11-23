@@ -53,12 +53,12 @@ def test_claude_code_command():
     assert cmd[0] == "claude"
     assert "-p" in cmd
     assert "do stuff" in cmd
-    # Pinned to Opus 4.7
+    # Pinned to the central default (Opus 5.5)
     assert "--model" in cmd
     from polyharness.config import DEFAULT_CLAUDE_CODE_MODEL
 
     assert DEFAULT_CLAUDE_CODE_MODEL in cmd
-    assert DEFAULT_CLAUDE_CODE_MODEL == "claude-opus-4-8"
+    assert DEFAULT_CLAUDE_CODE_MODEL == "claude-opus-5-5"
     # Headless edits must be auto-approved or the agent can't write candidates
     assert "--permission-mode" in cmd
     assert "acceptEdits" in cmd
@@ -362,3 +362,60 @@ def test_config_accepts_new_backends():
     for backend in ["api", "claude-code", "claw-code", "codex", "opencode", "pi", "local"]:
         cfg = ProposerConfig(backend=backend)  # type: ignore[arg-type]
         assert cfg.backend == backend
+
+
+# ---------------------------------------------------------------------------
+# Per-backend model overrides (proposer.cli_models)
+# ---------------------------------------------------------------------------
+
+def test_claude_code_model_override():
+    cmd = ClaudeCodeAdapter().build_command("x", model="claude-sonnet-5-5")
+    assert cmd[cmd.index("--model") + 1] == "claude-sonnet-5-5"
+
+
+def test_codex_model_override_and_default():
+    assert "--model" not in CodexAdapter().build_command("x")
+    cmd = CodexAdapter().build_command("x", model="some-model")
+    assert cmd[cmd.index("--model") + 1] == "some-model"
+    assert cmd[-1] == "x"  # prompt stays the final positional arg
+
+
+def test_only_model_capable_adapters_advertise_support():
+    capable = {n for n, cls in ADAPTER_REGISTRY.items() if cls.supports_model}
+    assert capable == {"claude-code", "codex"}
+
+
+def test_cli_proposer_rejects_model_for_unsupported_backend():
+    with pytest.raises(ValueError, match="does not accept a model override"):
+        CLIProposer(backend="hermes", model="m")
+
+
+def test_factory_routes_cli_models_per_backend():
+    from polyharness.config import ProposerConfig
+    from polyharness.proposer import create_proposer
+
+    cfg = ProposerConfig(backend="codex", cli_models={"claude-code": "claude-sonnet-5-5"})
+    assert create_proposer(cfg).model is None  # override is keyed to claude-code only
+    cfg = ProposerConfig(backend="claude-code", cli_models={"claude-code": "claude-sonnet-5-5"})
+    assert create_proposer(cfg).model == "claude-sonnet-5-5"
+
+
+def test_cli_models_rejects_unknown_backend_key():
+    from polyharness.config import ProposerConfig
+
+    with pytest.raises(ValueError):
+        ProposerConfig(cli_models={"hermes": "m"})
+
+
+def test_cli_proposer_passes_model_to_command(tmp_path):
+    ws = _make_workspace(tmp_path)
+    cand = ws / "candidates" / "iter_0"
+    proposer = CLIProposer(backend="claude-code", model="claude-sonnet-5-5")
+    from polyharness.utils.proc import ProcResult
+
+    fake = ProcResult(returncode=0, stdout="ok", stderr="")
+    with patch("polyharness.proposer.cli_proposer.run_process_group", return_value=fake) as run:
+        meta = proposer.propose(ws, cand, 1, 0)
+    cmd = run.call_args.args[0]
+    assert cmd[cmd.index("--model") + 1] == "claude-sonnet-5-5"
+    assert meta["proposer_model"] == "cli:claude-code:claude-sonnet-5-5"

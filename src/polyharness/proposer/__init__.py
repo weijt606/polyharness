@@ -16,6 +16,8 @@ def create_proposer(config) -> BaseProposer:
             model=config.model,
             max_tokens=config.max_tokens,
             temperature=config.temperature,
+            effort=config.effort,
+            refusal_fallback=config.refusal_fallback,
         )
     if config.backend == "openai":
         return OpenAIProposer(
@@ -32,6 +34,7 @@ def create_proposer(config) -> BaseProposer:
             backend=config.backend,
             cli_path=config.cli_path,
             timeout=getattr(config, "timeout", 600),
+            model=(getattr(config, "cli_models", None) or {}).get(config.backend),
         )
     raise ValueError(
         f"Unsupported proposer backend: {config.backend}. "

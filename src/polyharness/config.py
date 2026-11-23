@@ -27,9 +27,16 @@ BackendName = Literal[
 
 # Central model-default table — update model generations here (and in the
 # matching tests), not in scattered adapter/proposer constants.
-DEFAULT_API_MODEL = "claude-sonnet-5"  # Anthropic API backend
+DEFAULT_API_MODEL = "claude-opus-5-5"  # Anthropic API backend
 DEFAULT_OPENAI_MODEL = "gpt-4o"  # openai backend mostly fronts local endpoints
-DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-8"  # pinned for the claude-code CLI
+DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-5-5"  # pinned for the claude-code CLI
+DEFAULT_API_MAX_TOKENS = 64000  # streamed, so no HTTP-timeout ceiling
+DEFAULT_EFFORT = "high"  # proposer work is reasoning-heavy; Opus 5.5 defaults to "medium"
+
+EffortLevel = Literal["low", "medium", "high", "xhigh", "max"]
+
+# CLI backends whose adapter accepts a model override (``--model``).
+ModelOverrideBackend = Literal["claude-code", "codex"]
 
 
 class SearchConfig(_ValidatedModel):
@@ -115,9 +122,13 @@ class ProposerConfig(_ValidatedModel):
             "default sqrt(2) is canonical UCB1. Higher = more exploration."
         ),
     )
-    model: str = Field(
-        default=DEFAULT_API_MODEL,
-        description="Model for the Proposer agent (api/openai backends; CLI backends use their own).",
+    model: str | None = Field(
+        default=None,
+        description=(
+            "Model for the api/openai backends. None = each backend's own default "
+            f"(api: {DEFAULT_API_MODEL}, openai: {DEFAULT_OPENAI_MODEL}). CLI "
+            "backends use proposer.cli_models instead."
+        ),
     )
     base_url: str | None = Field(
         default=None, description="Optional base URL for the API (useful for local models)."
@@ -125,15 +136,50 @@ class ProposerConfig(_ValidatedModel):
     api_key: str | None = Field(
         default=None, description="Optional API key (if None, reads from environment variables)."
     )
-    max_tokens: int = Field(default=16384, ge=1, description="Max output tokens per turn.")
+    max_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Max output tokens per proposer turn. None = backend default (api: "
+            f"{DEFAULT_API_MAX_TOKENS}, thinking included — requests are streamed, "
+            "so large values are safe; openai: not sent, the server decides)."
+        ),
+    )
     temperature: float | None = Field(
         default=None,
         ge=0.0,
         le=2.0,
         description=(
-            "Sampling temperature. Leave unset for current-generation Claude "
-            "models (Sonnet 5 / Opus 4.8+ reject explicit sampling params); "
-            "only set for older models or OpenAI-compatible endpoints."
+            "Sampling temperature — `openai` backend only. The Anthropic API "
+            "rejects sampling params on every current model (API version "
+            "2026-10-21), so the `api` backend ignores this with a warning."
+        ),
+    )
+    effort: EffortLevel | None = Field(
+        default=DEFAULT_EFFORT,
+        description=(
+            "Reasoning effort for the `api` backend (sent as output_config.effort). "
+            "Automatically not sent to older models that reject it (Claude 4.1 "
+            "and earlier, Sonnet/Haiku 4.5); null = never send."
+        ),
+    )
+    refusal_fallback: bool = Field(
+        default=True,
+        description=(
+            "`api` backend: when the model declines a request (stop_reason "
+            "'refusal'), let the API re-run it on a fallback model chosen by "
+            "refusal category (server-side fallbacks). Only sent for models that "
+            "support it; the model that actually answered is recorded in "
+            "candidate metadata. Set false to treat refusals as plain failures."
+        ),
+    )
+    cli_models: dict[ModelOverrideBackend, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-backend model override for CLI agents that accept --model, e.g. "
+            "{claude-code: claude-sonnet-5-5, codex: <model>}. Keyed by backend so "
+            "an ensemble never sends one vendor's model name to another CLI. "
+            "Unset: claude-code uses the pinned default, codex its own default."
         ),
     )
     cli_path: str | None = Field(
