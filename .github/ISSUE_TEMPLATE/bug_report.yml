@@ -58,7 +58,7 @@ body:
     attributes:
       label: PolyHarness version
       description: Output of `ph --version`.
-      placeholder: "polyharness, version 0.3.0"
+      placeholder: "polyharness, version 0.3.1"
     validations:
       required: true
   - type: input

@@ -21,12 +21,19 @@ class CodexAdapter(CLIAdapter):
     def default_binary(self) -> str:
         return "codex"
 
-    def build_command(self, prompt: str, *, cli_path: str | None = None) -> list[str]:
+    supports_model = True
+
+    def build_command(
+        self, prompt: str, *, cli_path: str | None = None, model: str | None = None
+    ) -> list[str]:
         binary = cli_path or self.default_binary
-        return [
+        cmd = [
             binary,
             "exec",                          # headless, non-interactive mode
             "--skip-git-repo-check",         # the workspace is not a git repo
             "--sandbox", "workspace-write",  # allow edits within the workspace cwd
-            prompt,
         ]
+        if model:
+            cmd += ["--model", model]        # else: codex's own configured default
+        cmd.append(prompt)
+        return cmd

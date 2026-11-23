@@ -4,6 +4,73 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-11-23
+
+Model-generation refresh. 0.3.0 was never published, so this is the first
+release carrying the 0.3.0 loop-engineering and integrity work as well.
+
+### Changed
+- **Default models moved to the current generation:** the `api` backend now
+  defaults to `claude-opus-5-5` (was `claude-sonnet-5`) and the `claude-code`
+  backend pins `claude-opus-5-5` (was `claude-opus-4-8`). Both live in the
+  central table in `polyharness/config.py`.
+- `api` backend requests are streamed (no HTTP timeouts on long reasoning
+  turns) and use automatic prompt caching over the growing tool-loop history,
+  in addition to the existing system-prompt breakpoint.
+- `proposer.temperature` is now documented as `openai`-backend only. The
+  Anthropic API rejects sampling parameters on every current model, so the
+  `api` backend never sends it and prints a warning instead of failing every
+  iteration with a 400.
+- `anthropic` SDK requirement tightened to a tested range (`>=0.116.0,<3`).
+- `proposer.model` and `proposer.max_tokens` now default to `null` = the
+  backend's own default. The `api` backend uses `claude-opus-5-5` and a
+  64000-token streamed turn (thinking counts against it, so 16384 was too
+  tight at `effort: high`); the `openai` backend uses its own default model
+  and leaves `max_tokens` to the server. Existing configs with explicit
+  values keep them.
+
+### Added
+- `proposer.effort` (default `high`) — reasoning effort for the `api` backend,
+  sent as `output_config.effort`. Opus 5.5 defaults to `medium` server-side,
+  which under-serves proposer work. Not sent (with a warning) to models that
+  reject it — Claude 4.1 and earlier, Sonnet 4.5, Haiku 4.5 — so pinned older
+  models keep working. `null` = never send.
+- `proposer.refusal_fallback` (default `true`) — when the model declines a
+  request, the API re-runs it on a fallback model chosen by refusal category
+  (server-side fallbacks, beta). Only sent for models that support it. If a
+  fallback model answered, candidate metadata records it in `served_by_models`.
+  After a mid-output fallback, tool calls from the declined partial output are
+  neither executed nor echoed back (only its text is kept, and the `fallback`
+  boundary block stays in place, as the API requires).
+- Refusals are now explicit failures (`ProposerRefusalError`, with the refusal
+  category) and flow through the reflective-retry feedback path, instead of
+  being recorded as an empty "no change" candidate and evaluated.
+- `proposer.cli_models` — per-backend `--model` override for CLI agents that
+  accept one (`claude-code`, `codex`), keyed by backend so an ensemble never
+  sends one vendor's model name to another CLI. Unsupported keys are rejected
+  at config time.
+- `ph config set <key> null` (or `~`) sets a value to YAML null.
+
+### Fixed
+- `api` backend: a response cut off at `max_tokens` is now a failure with a
+  clear message, instead of being treated as a finished (possibly unchanged or
+  half-edited) candidate.
+- `api` backend: transient errors delivered mid-stream (an SSE `error` event
+  such as `overloaded_error` on an HTTP-200 stream) are retried like their
+  HTTP-status equivalents.
+- `api` backend: the final summary request after the 50-round tool budget is
+  exhausted no longer drops the tool definitions (the history contains
+  tool_use blocks, so the API rejected it and the iteration's work was
+  discarded); it keeps `tools`, sets `tool_choice: none`, and adds the
+  instruction to the last tool-result turn.
+- `openai` backend: an unset `proposer.model` used the Anthropic default model
+  name (so local endpoints returned "model not found"); it now uses the openai
+  backend's own default.
+- README / README_CN configuration reference: stale default model, a
+  `temperature: 0.7` example that now fails on the Anthropic API, a
+  non-existent `docker`/`custom` evaluator type, and missing
+  `max_consecutive_failures` / `parallel_tasks` / `timeout` fields.
+
 ## [0.3.0] - 2026-07-03
 
 Loop-engineering release: the search loop now learns from its own history,

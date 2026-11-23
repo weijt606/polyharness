@@ -316,6 +316,28 @@ def test_config_set_backend(runner, workspace):
     assert config.proposer.backend == "claude-code"
 
 
+def test_config_set_null(runner, workspace):
+    result = runner.invoke(main, ["config", "set", "proposer.effort", "null",
+                                  "--workspace", str(workspace.root)])
+    assert result.exit_code == 0, result.output
+    assert workspace.load_config().proposer.effort is None
+
+
+def test_config_set_literal_none_stays_a_string(runner, workspace):
+    """Only `null`/`~` mean YAML null; the word `none` is an ordinary value."""
+    result = runner.invoke(main, ["config", "set", "proposer.model", "none",
+                                  "--workspace", str(workspace.root)])
+    assert result.exit_code == 0, result.output
+    assert workspace.load_config().proposer.model == "none"
+
+
+def test_config_set_cli_model_override(runner, workspace):
+    result = runner.invoke(main, ["config", "set", "proposer.cli_models.claude-code",
+                                  "claude-sonnet-5-5", "--workspace", str(workspace.root)])
+    assert result.exit_code == 0, result.output
+    assert workspace.load_config().proposer.cli_models == {"claude-code": "claude-sonnet-5-5"}
+
+
 # --- ph diff ---
 
 

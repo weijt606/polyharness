@@ -24,6 +24,11 @@ class CLIResult:
 class CLIAdapter(ABC):
     """Abstract adapter for a CLI-based coding agent."""
 
+    #: True when ``build_command`` accepts a ``model=`` keyword (the CLI has a
+    #: ``--model`` flag). Adapters that leave this False keep the original
+    #: ``build_command(prompt, *, cli_path=None)`` signature unchanged.
+    supports_model: bool = False
+
     @property
     @abstractmethod
     def name(self) -> str:

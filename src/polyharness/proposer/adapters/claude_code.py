@@ -10,7 +10,8 @@ Verified against Claude Code (July 2026):
   are blocked. `acceptEdits` still gates arbitrary Bash/network (least-privilege,
   appropriate for the isolated workspace).
 - The pinned model comes from the central default table in
-  `polyharness.config` (currently Opus 4.8; full name for reproducibility).
+  `polyharness.config` (currently Opus 5.5; full name for reproducibility);
+  `proposer.cli_models["claude-code"]` overrides it.
 """
 
 from __future__ import annotations
@@ -34,13 +35,17 @@ class ClaudeCodeAdapter(CLIAdapter):
     def default_binary(self) -> str:
         return "claude"
 
-    def build_command(self, prompt: str, *, cli_path: str | None = None) -> list[str]:
+    supports_model = True
+
+    def build_command(
+        self, prompt: str, *, cli_path: str | None = None, model: str | None = None
+    ) -> list[str]:
         binary = cli_path or self.default_binary
         return [
             binary,
             "-p",                                # print mode (non-interactive)
             prompt,
-            "--model", CLAUDE_CODE_MODEL,        # pinned via config defaults
+            "--model", model or CLAUDE_CODE_MODEL,  # pinned unless overridden
             "--permission-mode", "acceptEdits",  # auto-approve file edits (headless)
             "--output-format", "text",
         ]
